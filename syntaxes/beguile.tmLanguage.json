@@ -6,6 +6,10 @@
   "patterns": [
     { "include": "#comments" },
     { "include": "#i6-block" },
+    { "include": "#i6-line" },
+    { "include": "#emitter-body-single" },
+    { "include": "#emitter-body-multi" },
+    { "include": "#interpolated-strings" },
     { "include": "#strings" },
     { "include": "#char-literals" },
     { "include": "#dictionary-words" },
@@ -46,9 +50,9 @@
     },
 
     "i6-block": {
-      "comment": "Raw Inform 6 block: #i6 { ... } or #i6raw { ... }. Captures leading whitespace in group 1 so the end pattern can require the closing } at the same indentation level, regardless of column position.",
+      "comment": "Raw Inform 6 block: #i6 { ... }. Captures leading whitespace in group 1 so the end pattern can require the closing } at the same indentation level, regardless of column position.",
       "name": "meta.embedded.block.i6.beguile",
-      "begin": "^(\\s*)#i6(?:raw)?\\s*\\{",
+      "begin": "^(\\s*)#i6\\s*\\{",
       "end": "^\\1\\}",
       "beginCaptures": {
         "0": { "name": "keyword.control.directive.beguile" }
@@ -59,6 +63,92 @@
       "contentName": "meta.embedded.block.i6.beguile",
       "patterns": [
         { "include": "source.inform6" }
+      ]
+    },
+
+    "i6-line": {
+      "comment": "Single-line #i6 directive: #i6 i6code (no braces — parser reads to end of line). Negative lookahead ensures the block form #i6 { is handled by i6-block instead.",
+      "match": "(#i6)\\s+(?!\\{)([^\\n]*)",
+      "captures": {
+        "1": { "name": "keyword.control.directive.beguile" },
+        "2": {
+          "patterns": [
+            { "include": "source.inform6" }
+          ]
+        }
+      }
+    },
+
+    "emitter-body-single": {
+      "comment": "Single-line emitter body: emitter TYPE NAME(params) { i6expr }. Must match before multi-line rule.",
+      "match": "\\bemitter\\b([^{\\n]*)\\{([^\\n}]*)\\}",
+      "captures": {
+        "1": {
+          "patterns": [
+            { "include": "#keywords-type-primitive" },
+            { "include": "#function-definition" }
+          ]
+        },
+        "2": {
+          "patterns": [
+            { "include": "#emitter-vars" },
+            { "include": "source.inform6" }
+          ]
+        }
+      }
+    },
+
+    "emitter-body-multi": {
+      "comment": "Multi-line emitter body. Indentation back-reference ensures } matches opener's indent level.",
+      "begin": "^(\\s*)\\bemitter\\b[^\\n]*\\{[^\\n}]*$",
+      "end": "^\\1\\}",
+      "beginCaptures": {
+        "0": {
+          "patterns": [
+            { "include": "#keywords-declaration" },
+            { "include": "#keywords-type-primitive" },
+            { "include": "#function-definition" }
+          ]
+        }
+      },
+      "endCaptures": {
+        "0": { "name": "keyword.control.directive.beguile" }
+      },
+      "contentName": "meta.embedded.emitter.i6.beguile",
+      "patterns": [
+        { "include": "#emitter-vars" },
+        { "include": "source.inform6" }
+      ]
+    },
+
+    "interpolated-strings": {
+      "comment": "Interpolated string literal: $\"text {expr} text\". Must be listed before plain strings so $\" is caught first.",
+      "name": "string.quoted.double.interpolated.beguile",
+      "begin": "(\\$)(\")",
+      "end": "\"",
+      "beginCaptures": {
+        "1": { "name": "keyword.operator.string.interpolated.beguile" },
+        "2": { "name": "punctuation.definition.string.begin.beguile" }
+      },
+      "endCaptures": {
+        "0": { "name": "punctuation.definition.string.end.beguile" }
+      },
+      "patterns": [
+        {
+          "comment": "Interpolated expression span: { ... }",
+          "name": "meta.interpolation.beguile",
+          "begin": "\\{",
+          "end": "\\}",
+          "beginCaptures": { "0": { "name": "punctuation.section.interpolation.begin.beguile" } },
+          "endCaptures": { "0": { "name": "punctuation.section.interpolation.end.beguile" } },
+          "patterns": [
+            { "include": "$self" }
+          ]
+        },
+        {
+          "name": "constant.character.escape.beguile",
+          "match": "\\\\[\"\\\\n^~@{]"
+        }
       ]
     },
 
