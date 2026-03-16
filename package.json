@@ -38,6 +38,11 @@
         }
       }
     },
+    "configurationDefaults": {
+      "[beguile]": {
+        "editor.semanticHighlighting.enabled": true
+      }
+    },
     "semanticTokenScopes": [
       {
         "scopes": {
