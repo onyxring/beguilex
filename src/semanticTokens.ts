@@ -84,13 +84,18 @@ interface TypeInfo {
 
 interface MemberInfo {
     name: string;
+    className: string;      // which class/object declared this member
     tokenType: 'method' | 'property';
+    params: string;         // raw param string, e.g. "string s, int n" (empty for properties)
+    returnType: string;     // e.g. "void", "int", "char"
     declLine: number;
     declCol: number;
 }
 
 interface FunctionInfo {
     name: string;
+    params: string;
+    returnType: string;
     declLine: number;
     declCol: number;
 }
@@ -123,6 +128,7 @@ function collectMembers(lines: string[], seen: Set<string>): MemberInfo[] {
     let depth = 0;
     let classBodyDepth = -1;
     let i6Depth = -1;
+    let currentClassName = '';
 
     for (let i = 0; i < lines.length; i++) {
         const raw = lines[i];
@@ -147,9 +153,16 @@ function collectMembers(lines: string[], seen: Set<string>): MemberInfo[] {
                 if (!seen.has(name)) {
                     seen.add(name);
                     const typeStr = mm[1];
+                    const returnType = typeStr;
                     const typeIdx = raw.search(new RegExp('\\b' + reEsc(typeStr) + '\\b'));
                     const col = typeIdx >= 0 ? raw.indexOf(name, typeIdx + typeStr.length) : raw.indexOf(name);
-                    members.push({ name, tokenType: isMethod ? 'method' : 'property', declLine: i, declCol: col >= 0 ? col : 0 });
+                    let params = '';
+                    if (isMethod) {
+                        const openParen = mm.index + mm[0].length - 1; // position of '(' in stripped
+                        const closeParen = stripped.indexOf(')', openParen + 1);
+                        params = closeParen > openParen ? stripped.substring(openParen + 1, closeParen).trim() : '';
+                    }
+                    members.push({ name, className: currentClassName, tokenType: isMethod ? 'method' : 'property', params, returnType, declLine: i, declCol: col >= 0 ? col : 0 });
                 }
             }
         }
@@ -159,6 +172,7 @@ function collectMembers(lines: string[], seen: Set<string>): MemberInfo[] {
             const kw = declMatch[1];
             if (kw === 'class' || kw === 'object') {
                 classBodyDepth = depth + delta;
+                currentClassName = declMatch[2];
             }
         }
 
@@ -169,7 +183,10 @@ function collectMembers(lines: string[], seen: Set<string>): MemberInfo[] {
             depth += delta;
         }
 
-        if (classBodyDepth !== -1 && depth < classBodyDepth) classBodyDepth = -1;
+        if (classBodyDepth !== -1 && depth < classBodyDepth) {
+            classBodyDepth = -1;
+            currentClassName = '';
+        }
     }
     return members;
 }
@@ -197,9 +214,13 @@ function collectFunctions(lines: string[], seen: Set<string>): FunctionInfo[] {
                 if (!seen.has(name)) {
                     seen.add(name);
                     const typeStr = mm[1];
+                    const returnType = typeStr;
                     const typeIdx = raw.search(new RegExp('\\b' + reEsc(typeStr) + '\\b'));
                     const col = typeIdx >= 0 ? raw.indexOf(name, typeIdx + typeStr.length) : raw.indexOf(name);
-                    functions.push({ name, declLine: i, declCol: col >= 0 ? col : 0 });
+                    const openParen = mm.index + mm[0].length - 1; // position of '(' in stripped
+                    const closeParen = stripped.indexOf(')', openParen + 1);
+                    const params = closeParen > openParen ? stripped.substring(openParen + 1, closeParen).trim() : '';
+                    functions.push({ name, params, returnType, declLine: i, declCol: col >= 0 ? col : 0 });
                 }
             }
         }
@@ -295,9 +316,10 @@ async function collectFromIncludes(
 // ── Shared symbol collection ───────────────────────────────────────────────
 
 export interface SymbolCollection {
-    allTypes:     TypeInfo[];
-    allMembers:   MemberInfo[];
-    allFunctions: FunctionInfo[];
+    allTypes:       TypeInfo[];
+    allMembers:     MemberInfo[];
+    allFunctions:   FunctionInfo[];
+    membersByClass: Map<string, MemberInfo[]>;
 }
 
 export async function collectAllSymbols(document: vscode.TextDocument): Promise<SymbolCollection> {
@@ -325,7 +347,16 @@ export async function collectAllSymbols(document: vscode.TextDocument): Promise<
     }
 
     await collectFromIncludes(lines, document.uri.fsPath, visited, typeSeen, memberSeen, funcSeen, allTypes, allMembers, allFunctions);
-    return { allTypes, allMembers, allFunctions };
+
+    // Build membersByClass map by grouping allMembers by className
+    const membersByClass = new Map<string, MemberInfo[]>();
+    for (const m of allMembers) {
+        const list = membersByClass.get(m.className) ?? [];
+        list.push(m);
+        membersByClass.set(m.className, list);
+    }
+
+    return { allTypes, allMembers, allFunctions, membersByClass };
 }
 
 // ── Semantic tokens provider ───────────────────────────────────────────────

@@ -25,7 +25,7 @@ export class BeguileCompletionItemProvider implements vscode.CompletionItemProvi
         context: vscode.CompletionContext
     ): Promise<vscode.CompletionItem[]> {
 
-        const { allTypes, allMembers, allFunctions } = await collectAllSymbols(document);
+        const { allTypes, allMembers, allFunctions, membersByClass } = await collectAllSymbols(document);
 
         // Detect dot context: explicit trigger or the character just before cursor is '.'
         const lineText  = document.lineAt(position.line).text;
@@ -33,14 +33,41 @@ export class BeguileCompletionItemProvider implements vscode.CompletionItemProvi
         const isDot     = context.triggerCharacter === '.' || dotBefore;
 
         if (isDot) {
-            // Member completions — offer all known members regardless of receiver type
-            return allMembers.map(m => {
+            // Extract receiver name: word immediately before the dot
+            const textBeforeDot = lineText.substring(0, position.character - (dotBefore ? 1 : 0));
+            const receiverMatch = /([a-zA-Z_][a-zA-Z0-9_]*)$/.exec(textBeforeDot);
+            const receiverName = receiverMatch ? receiverMatch[1] : '';
+
+            // Try to resolve receiver type by scanning document lines backward
+            let resolvedTypeName: string | null = null;
+            if (receiverName) {
+                const typeNames = new Set(allTypes.map(t => t.name));
+                for (let lineIdx = position.line; lineIdx >= 0 && resolvedTypeName === null; lineIdx--) {
+                    const lt = document.lineAt(lineIdx).text;
+                    // Look for "KnownType receiverName" pattern
+                    const typeVarRe = new RegExp(`\\b([a-zA-Z_][a-zA-Z0-9_]*)\\s+${receiverName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`);
+                    const tv = typeVarRe.exec(lt);
+                    if (tv && typeNames.has(tv[1])) {
+                        resolvedTypeName = tv[1];
+                    }
+                }
+            }
+
+            // Use type-specific members if we resolved a type, otherwise fall back to all members
+            const membersToOffer = resolvedTypeName !== null
+                ? (membersByClass.get(resolvedTypeName) ?? allMembers)
+                : allMembers;
+
+            return membersToOffer.map(m => {
                 const kind = m.tokenType === 'method'
                     ? vscode.CompletionItemKind.Method
                     : vscode.CompletionItemKind.Property;
                 const item = new vscode.CompletionItem(m.name, kind);
                 if (m.tokenType === 'method') {
                     item.insertText = new vscode.SnippetString(`${m.name}($0)`);
+                    item.detail = `${m.returnType} ${m.name}(${m.params})`;
+                } else {
+                    item.detail = `${m.returnType} ${m.name}`;
                 }
                 return item;
             });
@@ -65,6 +92,7 @@ export class BeguileCompletionItemProvider implements vscode.CompletionItemProvi
         for (const f of allFunctions) {
             const item = new vscode.CompletionItem(f.name, vscode.CompletionItemKind.Function);
             item.insertText = new vscode.SnippetString(`${f.name}($0)`);
+            item.detail = `${f.returnType} ${f.name}(${f.params})`;
             items.push(item);
         }
 

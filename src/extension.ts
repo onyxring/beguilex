@@ -1,6 +1,8 @@
 import * as vscode from 'vscode';
 import { BeguileSemanticTokensProvider, tokenLegend } from './semanticTokens';
 import { BeguileCompletionItemProvider } from './completions';
+import { BeguileHoverProvider } from './hover';
+import { BeguileSignatureHelpProvider } from './signatureHelp';
 
 export function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(
@@ -13,6 +15,15 @@ export function activate(context: vscode.ExtensionContext) {
             { language: 'beguile' },
             new BeguileCompletionItemProvider(),
             '.'  // also trigger on dot for member completions
+        ),
+        vscode.languages.registerHoverProvider(
+            { language: 'beguile' },
+            new BeguileHoverProvider()
+        ),
+        vscode.languages.registerSignatureHelpProvider(
+            { language: 'beguile' },
+            new BeguileSignatureHelpProvider(),
+            '(', ','
         )
     );
 }
