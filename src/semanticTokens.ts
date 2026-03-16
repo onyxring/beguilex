@@ -169,6 +169,26 @@ async function findSystemInclude(name: string): Promise<string | null> {
     return null;
 }
 
+// Locate _beguileCore.bgl using the configured libraryPath setting first,
+// then falling back to a workspace search. This mirrors the compiler's own
+// library resolution: in dev mode the lib sits next to the source tree; in
+// release mode it sits next to the beguiler executable. The setting lets the
+// user point at either location explicitly.
+async function findCoreLibrary(): Promise<string | null> {
+    const config  = vscode.workspace.getConfiguration('beguile');
+    const libPath = config.get<string>('libraryPath');
+
+    if (libPath) {
+        const base      = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? '';
+        const resolved  = path.isAbsolute(libPath) ? libPath : path.join(base, libPath);
+        const candidate = path.join(resolved, '_beguileCore.bgl');
+        if (fs.existsSync(candidate)) return candidate;
+    }
+
+    // Auto-detect: search workspace for _beguileCore.bgl
+    return findSystemInclude('_beguileCore');
+}
+
 // Recursively walk #include directives, collecting declarations and members
 // from each referenced file. `visited` prevents cycles.
 async function collectFromIncludes(
@@ -224,8 +244,21 @@ export class BeguileSemanticTokensProvider implements vscode.DocumentSemanticTok
         const allTypes:   TypeInfo[]   = collectDeclarations(lines, typeSeen);
         const allMembers: MemberInfo[] = collectMembers(lines, memberSeen);
 
-        // Scan included files recursively
+        // Always scan _beguileCore.bgl first — it is implicitly available in
+        // every Beguile file without an explicit #include.
         const visited = new Set<string>([document.uri.fsPath]);
+        const coreFile = await findCoreLibrary();
+        if (coreFile && !visited.has(coreFile)) {
+            visited.add(coreFile);
+            try {
+                const coreLines = fs.readFileSync(coreFile, 'utf8').split('\n');
+                allTypes.push(...collectDeclarations(coreLines, typeSeen));
+                allMembers.push(...collectMembers(coreLines, memberSeen));
+                await collectFromIncludes(coreLines, coreFile, visited, typeSeen, memberSeen, allTypes, allMembers);
+            } catch { /* core not found, continue */ }
+        }
+
+        // Scan files referenced by explicit #include directives
         await collectFromIncludes(lines, document.uri.fsPath, visited, typeSeen, memberSeen, allTypes, allMembers);
 
         if (allTypes.length === 0 && allMembers.length === 0) return builder.build();

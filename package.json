@@ -28,6 +28,16 @@
         "path": "./syntaxes/beguile.tmLanguage.json"
       }
     ],
+    "configuration": {
+      "title": "Beguile",
+      "properties": {
+        "beguile.libraryPath": {
+          "type": "string",
+          "default": "",
+          "description": "Path to the Beguile library directory (beguiLib) containing _beguileCore.bgl. Can be absolute or relative to the workspace root. Leave empty to auto-detect."
+        }
+      }
+    },
     "semanticTokenScopes": [
       {
         "scopes": {
@@ -46,7 +56,8 @@
   "scripts": {
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
-    "package": "vsce package"
+    "package": "vsce package",
+    "deploy": "tsc -p ./ && code --command workbench.action.reloadWindow"
   },
   "devDependencies": {
     "@types/vscode": "^1.75.0",
