@@ -360,6 +360,7 @@ export class BeguileSemanticTokensProvider implements vscode.DocumentSemanticTok
         for (let lineIdx = 0; lineIdx < lines.length; lineIdx++) {
             const raw = lines[lineIdx];
             if (/^\s*\/\//.test(raw)) continue;
+            if (INCLUDE_RE.test(raw)) continue;  // include path — not code
 
             const stripped  = stripComments(raw);
             const strRanges = stringRanges(stripped);
