@@ -12,12 +12,15 @@
     { "include": "#numeric-literals" },
     { "include": "#emitter-vars" },
     { "include": "#preprocessor" },
+    { "include": "#grammar-token-calls" },
     { "include": "#keywords-control" },
     { "include": "#keywords-declaration" },
     { "include": "#keywords-type-declaration" },
     { "include": "#keywords-type-primitive" },
+    { "include": "#grammar-tokens" },
     { "include": "#constants-language" },
     { "include": "#keyword-self" },
+    { "include": "#function-definition" },
     { "include": "#operators" }
   ],
   "repository": {
@@ -109,9 +112,9 @@
     },
 
     "emitter-vars": {
-      "comment": "$self and $prop substitution placeholders inside emitter bodies",
+      "comment": "Substitution placeholders inside emitter bodies: $self, $prop, $counter, $element, $array, or any $identifier",
       "name": "variable.language.self.beguile",
-      "match": "\\$(self|prop)\\b"
+      "match": "\\$[a-zA-Z_][a-zA-Z0-9_]*"
     },
 
     "preprocessor": {
@@ -157,6 +160,23 @@
       ]
     },
 
+    "grammar-token-calls": {
+      "comment": "Parameterized grammar tokens: NOUN(Routine) and SCOPE(Routine)",
+      "match": "\\b(NOUN|SCOPE)\\s*(\\()([a-zA-Z_][a-zA-Z0-9_]*)(\\))",
+      "captures": {
+        "1": { "name": "support.constant.grammar-token.beguile" },
+        "2": { "name": "punctuation.beguile" },
+        "3": { "name": "entity.name.function.beguile" },
+        "4": { "name": "punctuation.beguile" }
+      }
+    },
+
+    "grammar-tokens": {
+      "comment": "Built-in grammar pattern tokens (bare, non-parameterized)",
+      "name": "support.constant.grammar-token.beguile",
+      "match": "\\b(ANYNUMBER|HELD|TOPIC|MULTI|MULTIHELD|MULTIEXCEPT|MULTIINSIDE|MULTIFIRST)\\b"
+    },
+
     "keywords-control": {
       "name": "keyword.control.beguile",
       "match": "\\b(if|else|for|while|do|switch|case|default|break|continue|return|in)\\b"
@@ -164,7 +184,7 @@
 
     "keywords-declaration": {
       "name": "storage.modifier.beguile",
-      "match": "\\b(extern|extend|emitter|replace|const)\\b"
+      "match": "\\b(extern|extend|emitter|replace|const|alias)\\b"
     },
 
     "keywords-type-declaration": {
@@ -185,6 +205,14 @@
     "keyword-self": {
       "name": "variable.language.self.beguile",
       "match": "\\bself\\b"
+    },
+
+    "function-definition": {
+      "comment": "Highlight function/method name in definitions: returnType functionName(",
+      "match": "(?<![.])\\b([a-zA-Z_][a-zA-Z0-9_<>]*)\\s+([a-zA-Z_][a-zA-Z0-9_]*)\\s*(?=\\()",
+      "captures": {
+        "2": { "name": "entity.name.function.beguile" }
+      }
     },
 
     "operators": {
