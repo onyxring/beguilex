@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 
+
 // Token types and modifiers exposed to VSCode
 // 'type' is used for class/object name usages (non-declaration sites) so
 // themes that don't style 'class' usage separately still show a color.
@@ -173,14 +174,10 @@ function collectMembers(lines: string[], seen: Set<string>): MemberInfo[] {
 // inside any beguiLib directory (or any .bgl matching the name).
 async function findSystemInclude(name: string): Promise<string | null> {
     const withExt = name.endsWith('.bgl') ? name : `${name}.bgl`;
-    // Check directly inside beguiLib/ first (** between slashes requires at
-    // least one segment in VSCode's glob engine, so we need a separate pass
-    // for files that live directly in the library root).
     const direct = await vscode.workspace.findFiles(`**/beguiLib/${withExt}`, undefined, 1);
     if (direct.length > 0) return direct[0].fsPath;
     const inSubdir = await vscode.workspace.findFiles(`**/beguiLib/**/${withExt}`, undefined, 1);
     if (inSubdir.length > 0) return inSubdir[0].fsPath;
-    // Fall back to any workspace match
     const anywhere = await vscode.workspace.findFiles(`**/${withExt}`, '**/node_modules/**', 1);
     if (anywhere.length > 0) return anywhere[0].fsPath;
     return null;
