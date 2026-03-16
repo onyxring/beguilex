@@ -6,7 +6,7 @@ import * as path from 'path';
 // Token types and modifiers exposed to VSCode
 // 'type' is used for class/object name usages (non-declaration sites) so
 // themes that don't style 'class' usage separately still show a color.
-const tokenTypes = ['class', 'enum', 'property', 'method', 'type'];
+const tokenTypes = ['class', 'enum', 'property', 'method', 'type', 'function'];
 const tokenModifiers = ['declaration'];
 export const tokenLegend = new vscode.SemanticTokensLegend(tokenTypes, tokenModifiers);
 
@@ -85,6 +85,12 @@ interface TypeInfo {
 interface MemberInfo {
     name: string;
     tokenType: 'method' | 'property';
+    declLine: number;
+    declCol: number;
+}
+
+interface FunctionInfo {
+    name: string;
     declLine: number;
     declCol: number;
 }
@@ -168,6 +174,46 @@ function collectMembers(lines: string[], seen: Set<string>): MemberInfo[] {
     return members;
 }
 
+function collectFunctions(lines: string[], seen: Set<string>): FunctionInfo[] {
+    const functions: FunctionInfo[] = [];
+    let depth = 0;
+    let i6Depth = -1;
+
+    for (let i = 0; i < lines.length; i++) {
+        const raw = lines[i];
+        const stripped = stripComments(raw);
+
+        const i6Open = /^\s*#i6(?:raw)?\s*\{/.test(stripped);
+        if (i6Open && i6Depth === -1) i6Depth = depth;
+
+        const delta = netBraceChange(stripped);
+        const declMatch = BODY_OPENER_RE.exec(stripped);
+
+        // Top-level functions: depth 0, not inside i6, not a type declaration line
+        if (depth === 0 && i6Depth === -1 && !declMatch) {
+            const mm = MEMBER_DECL_RE.exec(stripped);
+            if (mm && mm[3] === '(') {
+                const name = mm[2];
+                if (!seen.has(name)) {
+                    seen.add(name);
+                    const typeStr = mm[1];
+                    const typeIdx = raw.search(new RegExp('\\b' + reEsc(typeStr) + '\\b'));
+                    const col = typeIdx >= 0 ? raw.indexOf(name, typeIdx + typeStr.length) : raw.indexOf(name);
+                    functions.push({ name, declLine: i, declCol: col >= 0 ? col : 0 });
+                }
+            }
+        }
+
+        if (i6Depth !== -1) {
+            depth += delta;
+            if (depth <= i6Depth) i6Depth = -1;
+        } else {
+            depth += delta;
+        }
+    }
+    return functions;
+}
+
 // ── Include resolution ─────────────────────────────────────────────────────
 
 // Locate a system include (<name>) by searching the workspace for name.bgl
@@ -211,8 +257,10 @@ async function collectFromIncludes(
     visited: Set<string>,
     typeSeen: Set<string>,
     memberSeen: Set<string>,
+    funcSeen: Set<string>,
     allTypes: TypeInfo[],
-    allMembers: MemberInfo[]
+    allMembers: MemberInfo[],
+    allFunctions: FunctionInfo[]
 ): Promise<void> {
     for (const line of lines) {
         const m = INCLUDE_RE.exec(line);
@@ -239,7 +287,8 @@ async function collectFromIncludes(
         const fileLines = content.split('\n');
         allTypes.push(...collectDeclarations(fileLines, typeSeen));
         allMembers.push(...collectMembers(fileLines, memberSeen));
-        await collectFromIncludes(fileLines, resolved, visited, typeSeen, memberSeen, allTypes, allMembers);
+        allFunctions.push(...collectFunctions(fileLines, funcSeen));
+        await collectFromIncludes(fileLines, resolved, visited, typeSeen, memberSeen, funcSeen, allTypes, allMembers, allFunctions);
     }
 }
 
@@ -252,11 +301,13 @@ export class BeguileSemanticTokensProvider implements vscode.DocumentSemanticTok
 
         // Shared seen-sets ensure names declared in the current file take
         // precedence over identically-named declarations in included files.
-        const typeSeen: Set<string>   = new Set();
+        const typeSeen:   Set<string> = new Set();
         const memberSeen: Set<string> = new Set();
+        const funcSeen:   Set<string> = new Set();
 
-        const allTypes:   TypeInfo[]   = collectDeclarations(lines, typeSeen);
-        const allMembers: MemberInfo[] = collectMembers(lines, memberSeen);
+        const allTypes:     TypeInfo[]     = collectDeclarations(lines, typeSeen);
+        const allMembers:   MemberInfo[]   = collectMembers(lines, memberSeen);
+        const allFunctions: FunctionInfo[] = collectFunctions(lines, funcSeen);
 
         // Always scan _beguileCore.bgl first — it is implicitly available in
         // every Beguile file without an explicit #include.
@@ -268,18 +319,20 @@ export class BeguileSemanticTokensProvider implements vscode.DocumentSemanticTok
                 const coreLines = fs.readFileSync(coreFile, 'utf8').split('\n');
                 allTypes.push(...collectDeclarations(coreLines, typeSeen));
                 allMembers.push(...collectMembers(coreLines, memberSeen));
-                await collectFromIncludes(coreLines, coreFile, visited, typeSeen, memberSeen, allTypes, allMembers);
+                allFunctions.push(...collectFunctions(coreLines, funcSeen));
+                await collectFromIncludes(coreLines, coreFile, visited, typeSeen, memberSeen, funcSeen, allTypes, allMembers, allFunctions);
             } catch { /* core not found, continue */ }
         }
 
         // Scan files referenced by explicit #include directives
-        await collectFromIncludes(lines, document.uri.fsPath, visited, typeSeen, memberSeen, allTypes, allMembers);
+        await collectFromIncludes(lines, document.uri.fsPath, visited, typeSeen, memberSeen, funcSeen, allTypes, allMembers, allFunctions);
 
-        if (allTypes.length === 0 && allMembers.length === 0) return builder.build();
+        if (allTypes.length === 0 && allMembers.length === 0 && allFunctions.length === 0) return builder.build();
 
         // ── Build lookup maps ──────────────────────────────────────────────
-        const typeMap   = new Map<string, TypeInfo>(allTypes.map(t => [t.name, t]));
-        const memberMap = new Map<string, MemberInfo>(allMembers.map(m => [m.name, m]));
+        const typeMap     = new Map<string, TypeInfo>(allTypes.map(t => [t.name, t]));
+        const memberMap   = new Map<string, MemberInfo>(allMembers.map(m => [m.name, m]));
+        const functionMap = new Map<string, FunctionInfo>(allFunctions.map(f => [f.name, f]));
 
         const typePattern = allTypes.length > 0
             ? new RegExp(`\\b(${allTypes.map(t => reEsc(t.name)).join('|')})\\b`, 'g')
@@ -287,6 +340,10 @@ export class BeguileSemanticTokensProvider implements vscode.DocumentSemanticTok
 
         const memberPattern = allMembers.length > 0
             ? new RegExp(`\\.(${allMembers.map(m => reEsc(m.name)).join('|')})\\b`, 'g')
+            : null;
+
+        const functionPattern = allFunctions.length > 0
+            ? new RegExp(`\\b(${allFunctions.map(f => reEsc(f.name)).join('|')})\\b`, 'g')
             : null;
 
         // ── Emit tokens line by line (current document only) ──────────────
@@ -312,6 +369,22 @@ export class BeguileSemanticTokensProvider implements vscode.DocumentSemanticTok
                     const emitType = isDecl ? info.tokenType : 'type';
                     builder.push(lineIdx, col, m[1].length,
                         tokenTypes.indexOf(emitType),
+                        isDecl ? (1 << tokenModifiers.indexOf('declaration')) : 0);
+                }
+            }
+
+            // Function tokens: bare 'name(' not preceded by '.' (not a member call)
+            if (functionPattern) {
+                functionPattern.lastIndex = 0;
+                let m: RegExpExecArray | null;
+                while ((m = functionPattern.exec(stripped)) !== null) {
+                    const col = m.index;
+                    if (inRange(col, strRanges)) continue;
+                    if (col > 0 && stripped[col - 1] === '.') continue;
+                    const info = functionMap.get(m[1])!;
+                    const isDecl = lineIdx === info.declLine && col === info.declCol;
+                    builder.push(lineIdx, col, m[1].length,
+                        tokenTypes.indexOf('function'),
                         isDecl ? (1 << tokenModifiers.indexOf('declaration')) : 0);
                 }
             }
