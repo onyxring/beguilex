@@ -22,7 +22,7 @@ const MEMBER_DECL_RE = /^\s*(?:(?:extern|emitter|replace|const|array)\s+)*\b([a-
 const BODY_OPENER_RE = /^\s*(?:extern\s+|emitter\s+|alias\s+|extend\s+)*\b(class|object)\s+([a-zA-Z_][a-zA-Z0-9_]*)/;
 
 // #include <name> or #include "path"  (not #includeI6 — those are raw I6 files)
-const INCLUDE_RE = /^\s*#include\s*(?:<([^>]+)>|"([^"]+)")/;
+const INCLUDE_RE = /^\s*#?include\s*(?:<([^>]+)>|"([^"]+)")/;
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
