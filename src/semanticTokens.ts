@@ -1,4 +1,6 @@
 import * as vscode from 'vscode';
+import * as fs from 'fs';
+import * as path from 'path';
 
 // Token types and modifiers exposed to VSCode
 const tokenTypes = ['class', 'enum', 'property', 'method'];
@@ -12,10 +14,11 @@ const DECL_RE = /^\s*(?:extern\s+|emitter\s+|alias\s+)*\b(class|object|enum|bnum
 // optional modifiers, return type, member name, then '(' (method) or ';' (property)
 const MEMBER_DECL_RE = /^\s*(?:(?:extern|emitter|replace|const|array)\s+)*\b([a-zA-Z_][a-zA-Z0-9_<>]*)\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*(\(|;)/;
 
+// #include <name> or #include "path"  (not #includeI6 — those are raw I6 files)
+const INCLUDE_RE = /^\s*#include\s*(?:<([^>]+)>|"([^"]+)")/;
+
 // ── Helpers ────────────────────────────────────────────────────────────────
 
-// Strip line and block comments from a line (best-effort; doesn't handle
-// multi-line block comments that span more than one line).
 function stripComments(line: string): string {
     line = line.replace(/\/\*.*?\*\//g, match => ' '.repeat(match.length));
     const lc = line.indexOf('//');
@@ -23,7 +26,6 @@ function stripComments(line: string): string {
     return line;
 }
 
-// Count net brace change on a line, ignoring braces inside string literals.
 function netBraceChange(line: string): number {
     let count = 0;
     let inStr = false;
@@ -39,7 +41,6 @@ function netBraceChange(line: string): number {
     return count;
 }
 
-// Return column ranges of string literals on a line (for usage-scan skipping).
 function stringRanges(line: string): [number, number][] {
     const ranges: [number, number][] = [];
     let i = 0;
@@ -61,7 +62,6 @@ function inRange(col: number, ranges: [number, number][]): boolean {
     return ranges.some(([s, e]) => col >= s && col <= e);
 }
 
-// Escape a string for use as a regex literal.
 function reEsc(s: string): string {
     return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -82,94 +82,61 @@ interface MemberInfo {
     declCol: number;
 }
 
-// ── Pass 1: collect type declarations ─────────────────────────────────────
+// ── Declaration collectors ─────────────────────────────────────────────────
 
-function collectDeclarations(lines: string[]): TypeInfo[] {
+function collectDeclarations(lines: string[], seen: Set<string>): TypeInfo[] {
     const types: TypeInfo[] = [];
-    const seen = new Set<string>();
-
     for (let i = 0; i < lines.length; i++) {
         const stripped = stripComments(lines[i]);
         const m = DECL_RE.exec(stripped);
         if (!m) continue;
-
         const keyword = m[1];
         const name = m[2];
         if (seen.has(name)) continue;
         seen.add(name);
-
         const tokenType: 'class' | 'enum' =
             (keyword === 'enum' || keyword === 'bnum') ? 'enum' : 'class';
-
         const col = lines[i].indexOf(
             name,
             lines[i].search(/\b(?:class|object|enum|bnum)\b/) + keyword.length
         );
         types.push({ name, tokenType, declLine: i, declCol: col });
     }
-
     return types;
 }
 
-// ── Pass 2: collect member declarations ───────────────────────────────────
-//
-// We walk lines maintaining a brace depth.  When a class/object declaration
-// is seen that opens a body on the same line, we note that classBodyDepth =
-// depth after processing that line.  Lines where depth equals classBodyDepth
-// are direct members of the class.  #i6{} blocks are detected so their
-// internal braces don't confuse the depth counter.
-
-function collectMembers(lines: string[]): MemberInfo[] {
+function collectMembers(lines: string[], seen: Set<string>): MemberInfo[] {
     const members: MemberInfo[] = [];
-    const seen = new Set<string>();
-
     let depth = 0;
-    let classBodyDepth = -1;  // brace depth of the interior of the current class/object
-    let i6Depth = -1;         // brace depth at which an #i6 block opened (-1 = not in one)
+    let classBodyDepth = -1;
+    let i6Depth = -1;
 
     for (let i = 0; i < lines.length; i++) {
         const raw = lines[i];
         const stripped = stripComments(raw);
 
-        // Detect #i6 / #i6raw block start — skip its braces from depth tracking
         const i6Open = /^\s*#i6(?:raw)?\s*\{/.test(stripped);
-        if (i6Open && i6Depth === -1) {
-            i6Depth = depth; // will be incremented below
-        }
+        if (i6Open && i6Depth === -1) i6Depth = depth;
 
         const delta = netBraceChange(stripped);
-
-        // Detect a class/object declaration that opens its body on this line
         const declMatch = DECL_RE.exec(stripped);
-        const opensBody = delta > 0;
 
-        if (declMatch && opensBody && i6Depth === -1) {
+        if (declMatch && delta > 0 && i6Depth === -1) {
             const kw = declMatch[1];
             if (kw === 'class' || kw === 'object') {
-                // Body depth is depth + delta (the interior after the '{')
                 classBodyDepth = depth + delta;
             }
         }
 
-        // Update depth — but don't let i6 contents change our logical depth
         if (i6Depth !== -1) {
-            // We're inside an i6 block; track its close without affecting classBodyDepth logic
             depth += delta;
-            if (depth <= i6Depth) {
-                // The i6 block's closing } has been consumed
-                i6Depth = -1;
-            }
+            if (depth <= i6Depth) i6Depth = -1;
         } else {
             depth += delta;
         }
 
-        // If we just stepped out of a class body, clear it
-        if (classBodyDepth !== -1 && depth < classBodyDepth) {
-            classBodyDepth = -1;
-        }
+        if (classBodyDepth !== -1 && depth < classBodyDepth) classBodyDepth = -1;
 
-        // Look for member declarations only at the class body's direct depth,
-        // skipping the declaration line itself and i6 blocks.
         if (classBodyDepth !== -1 && depth === classBodyDepth && i6Depth === -1 && !declMatch) {
             const mm = MEMBER_DECL_RE.exec(stripped);
             if (mm) {
@@ -180,48 +147,102 @@ function collectMembers(lines: string[]): MemberInfo[] {
                     const typeStr = mm[1];
                     const typeIdx = raw.search(new RegExp('\\b' + reEsc(typeStr) + '\\b'));
                     const col = typeIdx >= 0 ? raw.indexOf(name, typeIdx + typeStr.length) : raw.indexOf(name);
-                    members.push({
-                        name,
-                        tokenType: isMethod ? 'method' : 'property',
-                        declLine: i,
-                        declCol: col >= 0 ? col : 0
-                    });
+                    members.push({ name, tokenType: isMethod ? 'method' : 'property', declLine: i, declCol: col >= 0 ? col : 0 });
                 }
             }
         }
     }
-
     return members;
+}
+
+// ── Include resolution ─────────────────────────────────────────────────────
+
+// Locate a system include (<name>) by searching the workspace for name.bgl
+// inside any beguiLib directory (or any .bgl matching the name).
+async function findSystemInclude(name: string): Promise<string | null> {
+    const withExt = name.endsWith('.bgl') ? name : `${name}.bgl`;
+    // Prefer files inside a beguiLib folder; fall back to any workspace match
+    const inLib = await vscode.workspace.findFiles(`**/beguiLib/**/${withExt}`, undefined, 1);
+    if (inLib.length > 0) return inLib[0].fsPath;
+    const anywhere = await vscode.workspace.findFiles(`**/${withExt}`, '**/node_modules/**', 1);
+    if (anywhere.length > 0) return anywhere[0].fsPath;
+    return null;
+}
+
+// Recursively walk #include directives, collecting declarations and members
+// from each referenced file. `visited` prevents cycles.
+async function collectFromIncludes(
+    lines: string[],
+    currentFilePath: string,
+    visited: Set<string>,
+    typeSeen: Set<string>,
+    memberSeen: Set<string>,
+    allTypes: TypeInfo[],
+    allMembers: MemberInfo[]
+): Promise<void> {
+    for (const line of lines) {
+        const m = INCLUDE_RE.exec(line);
+        if (!m) continue;
+
+        const isSystem = !!m[1];
+        const name = m[1] ?? m[2];
+
+        let resolved: string | null = null;
+        if (isSystem) {
+            resolved = await findSystemInclude(name);
+        } else {
+            const candidate = path.resolve(path.dirname(currentFilePath), name);
+            resolved = fs.existsSync(candidate) ? candidate : null;
+        }
+
+        if (!resolved || visited.has(resolved)) continue;
+        visited.add(resolved);
+
+        let content: string;
+        try { content = fs.readFileSync(resolved, 'utf8'); }
+        catch { continue; }
+
+        const fileLines = content.split('\n');
+        allTypes.push(...collectDeclarations(fileLines, typeSeen));
+        allMembers.push(...collectMembers(fileLines, memberSeen));
+        await collectFromIncludes(fileLines, resolved, visited, typeSeen, memberSeen, allTypes, allMembers);
+    }
 }
 
 // ── Semantic tokens provider ───────────────────────────────────────────────
 
 export class BeguileSemanticTokensProvider implements vscode.DocumentSemanticTokensProvider {
-    provideDocumentSemanticTokens(document: vscode.TextDocument): vscode.SemanticTokens {
+    async provideDocumentSemanticTokens(document: vscode.TextDocument): Promise<vscode.SemanticTokens> {
         const builder = new vscode.SemanticTokensBuilder(tokenLegend);
         const lines = Array.from({ length: document.lineCount }, (_, i) => document.lineAt(i).text);
 
-        const types   = collectDeclarations(lines);
-        const members = collectMembers(lines);
+        // Shared seen-sets ensure names declared in the current file take
+        // precedence over identically-named declarations in included files.
+        const typeSeen: Set<string>   = new Set();
+        const memberSeen: Set<string> = new Set();
+
+        const allTypes:   TypeInfo[]   = collectDeclarations(lines, typeSeen);
+        const allMembers: MemberInfo[] = collectMembers(lines, memberSeen);
+
+        // Scan included files recursively
+        const visited = new Set<string>([document.uri.fsPath]);
+        await collectFromIncludes(lines, document.uri.fsPath, visited, typeSeen, memberSeen, allTypes, allMembers);
+
+        if (allTypes.length === 0 && allMembers.length === 0) return builder.build();
 
         // ── Build lookup maps ──────────────────────────────────────────────
+        const typeMap   = new Map<string, TypeInfo>(allTypes.map(t => [t.name, t]));
+        const memberMap = new Map<string, MemberInfo>(allMembers.map(m => [m.name, m]));
 
-        const typeMap   = new Map<string, TypeInfo>(types.map(t => [t.name, t]));
-        const memberMap = new Map<string, MemberInfo>(members.map(m => [m.name, m]));
-
-        // Regex for type names appearing as bare words
-        const typePattern = types.length > 0
-            ? new RegExp(`\\b(${types.map(t => reEsc(t.name)).join('|')})\\b`, 'g')
+        const typePattern = allTypes.length > 0
+            ? new RegExp(`\\b(${allTypes.map(t => reEsc(t.name)).join('|')})\\b`, 'g')
             : null;
 
-        // Regex for member names appearing after a '.'
-        // We match '.name' and then verify the character before '.' is alphanumeric or ')'
-        const memberPattern = members.length > 0
-            ? new RegExp(`\\.(${members.map(m => reEsc(m.name)).join('|')})\\b`, 'g')
+        const memberPattern = allMembers.length > 0
+            ? new RegExp(`\\.(${allMembers.map(m => reEsc(m.name)).join('|')})\\b`, 'g')
             : null;
 
-        // ── Emit tokens line by line ───────────────────────────────────────
-
+        // ── Emit tokens line by line (current document only) ──────────────
         for (let lineIdx = 0; lineIdx < lines.length; lineIdx++) {
             const raw = lines[lineIdx];
             if (/^\s*\/\//.test(raw)) continue;
@@ -236,18 +257,15 @@ export class BeguileSemanticTokensProvider implements vscode.DocumentSemanticTok
                 while ((m = typePattern.exec(stripped)) !== null) {
                     const col = m.index;
                     if (inRange(col, strRanges)) continue;
-
                     const info = typeMap.get(m[1])!;
                     const isDecl = lineIdx === info.declLine && col === info.declCol;
-                    builder.push(
-                        lineIdx, col, m[1].length,
+                    builder.push(lineIdx, col, m[1].length,
                         tokenTypes.indexOf(info.tokenType),
-                        isDecl ? (1 << tokenModifiers.indexOf('declaration')) : 0
-                    );
+                        isDecl ? (1 << tokenModifiers.indexOf('declaration')) : 0);
                 }
             }
 
-            // Member tokens: '.memberName' — verify preceding char is word char or ')'
+            // Member tokens: '.memberName' after an alphanumeric or ')'
             if (memberPattern) {
                 memberPattern.lastIndex = 0;
                 let m: RegExpExecArray | null;
@@ -255,19 +273,14 @@ export class BeguileSemanticTokensProvider implements vscode.DocumentSemanticTok
                     const dotCol  = m.index;
                     const nameCol = dotCol + 1;
                     const name    = m[1];
-
-                    // Must be a member access, not a dictionary word
                     const preceding = dotCol > 0 ? stripped[dotCol - 1] : '';
                     if (!/[a-zA-Z0-9_)]/.test(preceding)) continue;
                     if (inRange(nameCol, strRanges)) continue;
-
                     const info = memberMap.get(name)!;
                     const isDecl = lineIdx === info.declLine && nameCol === info.declCol;
-                    builder.push(
-                        lineIdx, nameCol, name.length,
+                    builder.push(lineIdx, nameCol, name.length,
                         tokenTypes.indexOf(info.tokenType),
-                        isDecl ? (1 << tokenModifiers.indexOf('declaration')) : 0
-                    );
+                        isDecl ? (1 << tokenModifiers.indexOf('declaration')) : 0);
                 }
             }
         }
