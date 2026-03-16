@@ -2,7 +2,7 @@
   "name": "beguile-language",
   "displayName": "Beguile",
   "description": "Syntax highlighting for the Beguile Interactive Fiction language",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "onyxring",
   "engines": { "vscode": "^1.75.0" },
   "categories": ["Programming Languages"],
@@ -10,6 +10,8 @@
     "type": "git",
     "url": "https://github.com/onyxring/beguile-vscode"
   },
+  "main": "./out/extension.js",
+  "activationEvents": [],
   "contributes": {
     "languages": [
       {
@@ -25,6 +27,26 @@
         "scopeName": "source.beguile",
         "path": "./syntaxes/beguile.tmLanguage.json"
       }
+    ],
+    "semanticTokenScopes": [
+      {
+        "scopes": {
+          "class": ["entity.name.type.class.beguile"],
+          "class.declaration": ["entity.name.type.class.beguile"],
+          "enum": ["entity.name.type.enum.beguile"],
+          "enum.declaration": ["entity.name.type.enum.beguile"]
+        }
+      }
     ]
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.75.0",
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0"
   }
 }
