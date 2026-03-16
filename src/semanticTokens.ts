@@ -3,7 +3,9 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 // Token types and modifiers exposed to VSCode
-const tokenTypes = ['class', 'enum', 'property', 'method'];
+// 'type' is used for class/object name usages (non-declaration sites) so
+// themes that don't style 'class' usage separately still show a color.
+const tokenTypes = ['class', 'enum', 'property', 'method', 'type'];
 const tokenModifiers = ['declaration'];
 export const tokenLegend = new vscode.SemanticTokensLegend(tokenTypes, tokenModifiers);
 
@@ -121,6 +123,27 @@ function collectMembers(lines: string[], seen: Set<string>): MemberInfo[] {
         const delta = netBraceChange(stripped);
         const declMatch = DECL_RE.exec(stripped);
 
+        // Check for members BEFORE updating depth — a member lives at
+        // classBodyDepth, measured at the START of the line (before any
+        // braces on this line are counted). Checking after the update would
+        // cause method declarations like `int hello(){` (delta=1) to be
+        // checked at depth+1, missing them entirely.
+        if (classBodyDepth !== -1 && depth === classBodyDepth && i6Depth === -1 && !declMatch) {
+            const mm = MEMBER_DECL_RE.exec(stripped);
+            if (mm) {
+                const name = mm[2];
+                const isMethod = mm[3] === '(';
+                if (!seen.has(name)) {
+                    seen.add(name);
+                    const typeStr = mm[1];
+                    const typeIdx = raw.search(new RegExp('\\b' + reEsc(typeStr) + '\\b'));
+                    const col = typeIdx >= 0 ? raw.indexOf(name, typeIdx + typeStr.length) : raw.indexOf(name);
+                    members.push({ name, tokenType: isMethod ? 'method' : 'property', declLine: i, declCol: col >= 0 ? col : 0 });
+                }
+            }
+        }
+
+        // Update classBodyDepth if this line opens a class/object body
         if (declMatch && delta > 0 && i6Depth === -1) {
             const kw = declMatch[1];
             if (kw === 'class' || kw === 'object') {
@@ -136,21 +159,6 @@ function collectMembers(lines: string[], seen: Set<string>): MemberInfo[] {
         }
 
         if (classBodyDepth !== -1 && depth < classBodyDepth) classBodyDepth = -1;
-
-        if (classBodyDepth !== -1 && depth === classBodyDepth && i6Depth === -1 && !declMatch) {
-            const mm = MEMBER_DECL_RE.exec(stripped);
-            if (mm) {
-                const name = mm[2];
-                const isMethod = mm[3] === '(';
-                if (!seen.has(name)) {
-                    seen.add(name);
-                    const typeStr = mm[1];
-                    const typeIdx = raw.search(new RegExp('\\b' + reEsc(typeStr) + '\\b'));
-                    const col = typeIdx >= 0 ? raw.indexOf(name, typeIdx + typeStr.length) : raw.indexOf(name);
-                    members.push({ name, tokenType: isMethod ? 'method' : 'property', declLine: i, declCol: col >= 0 ? col : 0 });
-                }
-            }
-        }
     }
     return members;
 }
@@ -292,8 +300,12 @@ export class BeguileSemanticTokensProvider implements vscode.DocumentSemanticTok
                     if (inRange(col, strRanges)) continue;
                     const info = typeMap.get(m[1])!;
                     const isDecl = lineIdx === info.declLine && col === info.declCol;
+                    // Declaration site: use 'class' or 'enum' with declaration modifier.
+                    // Usage site: use 'type' — universally colored by themes that may
+                    // not apply a visible style to 'class' without the declaration modifier.
+                    const emitType = isDecl ? info.tokenType : 'type';
                     builder.push(lineIdx, col, m[1].length,
-                        tokenTypes.indexOf(info.tokenType),
+                        tokenTypes.indexOf(emitType),
                         isDecl ? (1 << tokenModifiers.indexOf('declaration')) : 0);
                 }
             }

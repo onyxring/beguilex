@@ -48,7 +48,8 @@
           "property": ["variable.other.property.beguile"],
           "property.declaration": ["variable.other.property.beguile"],
           "method": ["entity.name.function.member.beguile"],
-          "method.declaration": ["entity.name.function.member.beguile"]
+          "method.declaration": ["entity.name.function.member.beguile"],
+          "type": ["entity.name.type.beguile"]
         }
       }
     ]
