@@ -1,0 +1,30 @@
+{
+  "name": "beguile-language",
+  "displayName": "Beguile",
+  "description": "Syntax highlighting for the Beguile Interactive Fiction language",
+  "version": "0.1.0",
+  "publisher": "onyxring",
+  "engines": { "vscode": "^1.75.0" },
+  "categories": ["Programming Languages"],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/onyxring/beguile-vscode"
+  },
+  "contributes": {
+    "languages": [
+      {
+        "id": "beguile",
+        "aliases": ["Beguile", "bgl"],
+        "extensions": [".bgl"],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "beguile",
+        "scopeName": "source.beguile",
+        "path": "./syntaxes/beguile.tmLanguage.json"
+      }
+    ]
+  }
+}
