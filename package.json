@@ -25,7 +25,10 @@
       {
         "language": "beguile",
         "scopeName": "source.beguile",
-        "path": "./syntaxes/beguile.tmLanguage.json"
+        "path": "./syntaxes/beguile.tmLanguage.json",
+        "embeddedLanguages": {
+          "meta.embedded.block.i6.beguile": "inform6"
+        }
       }
     ],
     "configuration": {

@@ -46,20 +46,19 @@
     },
 
     "i6-block": {
-      "comment": "Raw Inform 6 block: #i6 { ... } or #i6raw { ... }",
+      "comment": "Raw Inform 6 block: #i6 { ... } or #i6raw { ... }. Captures leading whitespace in group 1 so the end pattern can require the closing } at the same indentation level, regardless of column position.",
       "name": "meta.embedded.block.i6.beguile",
-      "begin": "#i6(?:raw)?\\s*\\{",
-      "end": "\\}",
+      "begin": "^(\\s*)#i6(?:raw)?\\s*\\{",
+      "end": "^\\1\\}",
       "beginCaptures": {
         "0": { "name": "keyword.control.directive.beguile" }
       },
       "endCaptures": {
         "0": { "name": "keyword.control.directive.beguile" }
       },
-      "contentName": "source.i6.embedded.beguile",
+      "contentName": "meta.embedded.block.i6.beguile",
       "patterns": [
-        { "include": "#emitter-vars" },
-        { "include": "#comments" }
+        { "include": "source.inform6" }
       ]
     },
 
