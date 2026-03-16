@@ -78,6 +78,7 @@ function reEsc(s: string): string {
 interface TypeInfo {
     name: string;
     tokenType: 'class' | 'enum';
+    declFile: string;
     declLine: number;
     declCol: number;
 }
@@ -88,6 +89,7 @@ interface MemberInfo {
     tokenType: 'method' | 'property';
     params: string;         // raw param string, e.g. "string s, int n" (empty for properties)
     returnType: string;     // e.g. "void", "int", "char"
+    declFile: string;
     declLine: number;
     declCol: number;
 }
@@ -96,13 +98,14 @@ interface FunctionInfo {
     name: string;
     params: string;
     returnType: string;
+    declFile: string;
     declLine: number;
     declCol: number;
 }
 
 // ── Declaration collectors ─────────────────────────────────────────────────
 
-function collectDeclarations(lines: string[], seen: Set<string>): TypeInfo[] {
+function collectDeclarations(lines: string[], seen: Set<string>, filePath: string): TypeInfo[] {
     const types: TypeInfo[] = [];
     for (let i = 0; i < lines.length; i++) {
         const stripped = stripComments(lines[i]);
@@ -118,12 +121,12 @@ function collectDeclarations(lines: string[], seen: Set<string>): TypeInfo[] {
             name,
             lines[i].search(/\b(?:class|object|enum|bnum)\b/) + keyword.length
         );
-        types.push({ name, tokenType, declLine: i, declCol: col });
+        types.push({ name, tokenType, declFile: filePath, declLine: i, declCol: col });
     }
     return types;
 }
 
-function collectMembers(lines: string[], seen: Set<string>): MemberInfo[] {
+function collectMembers(lines: string[], seen: Set<string>, filePath: string): MemberInfo[] {
     const members: MemberInfo[] = [];
     let depth = 0;
     let classBodyDepth = -1;
@@ -162,7 +165,7 @@ function collectMembers(lines: string[], seen: Set<string>): MemberInfo[] {
                         const closeParen = stripped.indexOf(')', openParen + 1);
                         params = closeParen > openParen ? stripped.substring(openParen + 1, closeParen).trim() : '';
                     }
-                    members.push({ name, className: currentClassName, tokenType: isMethod ? 'method' : 'property', params, returnType, declLine: i, declCol: col >= 0 ? col : 0 });
+                    members.push({ name, className: currentClassName, tokenType: isMethod ? 'method' : 'property', params, returnType, declFile: filePath, declLine: i, declCol: col >= 0 ? col : 0 });
                 }
             }
         }
@@ -191,7 +194,7 @@ function collectMembers(lines: string[], seen: Set<string>): MemberInfo[] {
     return members;
 }
 
-function collectFunctions(lines: string[], seen: Set<string>): FunctionInfo[] {
+function collectFunctions(lines: string[], seen: Set<string>, filePath: string): FunctionInfo[] {
     const functions: FunctionInfo[] = [];
     let depth = 0;
     let i6Depth = -1;
@@ -220,7 +223,7 @@ function collectFunctions(lines: string[], seen: Set<string>): FunctionInfo[] {
                     const openParen = mm.index + mm[0].length - 1; // position of '(' in stripped
                     const closeParen = stripped.indexOf(')', openParen + 1);
                     const params = closeParen > openParen ? stripped.substring(openParen + 1, closeParen).trim() : '';
-                    functions.push({ name, params, returnType, declLine: i, declCol: col >= 0 ? col : 0 });
+                    functions.push({ name, params, returnType, declFile: filePath, declLine: i, declCol: col >= 0 ? col : 0 });
                 }
             }
         }
@@ -306,9 +309,9 @@ async function collectFromIncludes(
         catch { continue; }
 
         const fileLines = content.split('\n');
-        allTypes.push(...collectDeclarations(fileLines, typeSeen));
-        allMembers.push(...collectMembers(fileLines, memberSeen));
-        allFunctions.push(...collectFunctions(fileLines, funcSeen));
+        allTypes.push(...collectDeclarations(fileLines, typeSeen, resolved));
+        allMembers.push(...collectMembers(fileLines, memberSeen, resolved));
+        allFunctions.push(...collectFunctions(fileLines, funcSeen, resolved));
         await collectFromIncludes(fileLines, resolved, visited, typeSeen, memberSeen, funcSeen, allTypes, allMembers, allFunctions);
     }
 }
@@ -329,19 +332,20 @@ export async function collectAllSymbols(document: vscode.TextDocument): Promise<
     const memberSeen: Set<string> = new Set();
     const funcSeen:   Set<string> = new Set();
 
-    const allTypes:     TypeInfo[]     = collectDeclarations(lines, typeSeen);
-    const allMembers:   MemberInfo[]   = collectMembers(lines, memberSeen);
-    const allFunctions: FunctionInfo[] = collectFunctions(lines, funcSeen);
+    const docPath = document.uri.fsPath;
+    const allTypes:     TypeInfo[]     = collectDeclarations(lines, typeSeen, docPath);
+    const allMembers:   MemberInfo[]   = collectMembers(lines, memberSeen, docPath);
+    const allFunctions: FunctionInfo[] = collectFunctions(lines, funcSeen, docPath);
 
-    const visited = new Set<string>([document.uri.fsPath]);
+    const visited = new Set<string>([docPath]);
     const coreFile = await findCoreLibrary();
     if (coreFile && !visited.has(coreFile)) {
         visited.add(coreFile);
         try {
             const coreLines = fs.readFileSync(coreFile, 'utf8').split('\n');
-            allTypes.push(...collectDeclarations(coreLines, typeSeen));
-            allMembers.push(...collectMembers(coreLines, memberSeen));
-            allFunctions.push(...collectFunctions(coreLines, funcSeen));
+            allTypes.push(...collectDeclarations(coreLines, typeSeen, coreFile));
+            allMembers.push(...collectMembers(coreLines, memberSeen, coreFile));
+            allFunctions.push(...collectFunctions(coreLines, funcSeen, coreFile));
             await collectFromIncludes(coreLines, coreFile, visited, typeSeen, memberSeen, funcSeen, allTypes, allMembers, allFunctions);
         } catch { /* core not found */ }
     }

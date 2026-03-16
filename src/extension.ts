@@ -3,6 +3,7 @@ import { BeguileSemanticTokensProvider, tokenLegend } from './semanticTokens';
 import { BeguileCompletionItemProvider } from './completions';
 import { BeguileHoverProvider } from './hover';
 import { BeguileSignatureHelpProvider } from './signatureHelp';
+import { BeguileDefinitionProvider } from './definition';
 
 export function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(
@@ -24,6 +25,10 @@ export function activate(context: vscode.ExtensionContext) {
             { language: 'beguile' },
             new BeguileSignatureHelpProvider(),
             '(', ','
+        ),
+        vscode.languages.registerDefinitionProvider(
+            { language: 'beguile' },
+            new BeguileDefinitionProvider()
         )
     );
 }
