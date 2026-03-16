@@ -16,6 +16,10 @@ const DECL_RE = /^\s*(?:extern\s+|emitter\s+|alias\s+)*\b(class|object|enum|bnum
 // optional modifiers, return type, member name, then '(' (method) or ';' (property)
 const MEMBER_DECL_RE = /^\s*(?:(?:extern|emitter|replace|const|array)\s+)*\b([a-zA-Z_][a-zA-Z0-9_<>]*)\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*(\(|;)/;
 
+// Body-opener for collectMembers — broader than DECL_RE: also matches
+// 'extend class Foo' so that members added via extension are included.
+const BODY_OPENER_RE = /^\s*(?:extern\s+|emitter\s+|alias\s+|extend\s+)*\b(class|object)\s+([a-zA-Z_][a-zA-Z0-9_]*)/;
+
 // #include <name> or #include "path"  (not #includeI6 — those are raw I6 files)
 const INCLUDE_RE = /^\s*#include\s*(?:<([^>]+)>|"([^"]+)")/;
 
@@ -121,7 +125,7 @@ function collectMembers(lines: string[], seen: Set<string>): MemberInfo[] {
         if (i6Open && i6Depth === -1) i6Depth = depth;
 
         const delta = netBraceChange(stripped);
-        const declMatch = DECL_RE.exec(stripped);
+        const declMatch = BODY_OPENER_RE.exec(stripped);
 
         // Check for members BEFORE updating depth — a member lives at
         // classBodyDepth, measured at the START of the line (before any
