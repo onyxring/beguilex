@@ -292,6 +292,42 @@ async function collectFromIncludes(
     }
 }
 
+// ── Shared symbol collection ───────────────────────────────────────────────
+
+export interface SymbolCollection {
+    allTypes:     TypeInfo[];
+    allMembers:   MemberInfo[];
+    allFunctions: FunctionInfo[];
+}
+
+export async function collectAllSymbols(document: vscode.TextDocument): Promise<SymbolCollection> {
+    const lines = Array.from({ length: document.lineCount }, (_, i) => document.lineAt(i).text);
+
+    const typeSeen:   Set<string> = new Set();
+    const memberSeen: Set<string> = new Set();
+    const funcSeen:   Set<string> = new Set();
+
+    const allTypes:     TypeInfo[]     = collectDeclarations(lines, typeSeen);
+    const allMembers:   MemberInfo[]   = collectMembers(lines, memberSeen);
+    const allFunctions: FunctionInfo[] = collectFunctions(lines, funcSeen);
+
+    const visited = new Set<string>([document.uri.fsPath]);
+    const coreFile = await findCoreLibrary();
+    if (coreFile && !visited.has(coreFile)) {
+        visited.add(coreFile);
+        try {
+            const coreLines = fs.readFileSync(coreFile, 'utf8').split('\n');
+            allTypes.push(...collectDeclarations(coreLines, typeSeen));
+            allMembers.push(...collectMembers(coreLines, memberSeen));
+            allFunctions.push(...collectFunctions(coreLines, funcSeen));
+            await collectFromIncludes(coreLines, coreFile, visited, typeSeen, memberSeen, funcSeen, allTypes, allMembers, allFunctions);
+        } catch { /* core not found */ }
+    }
+
+    await collectFromIncludes(lines, document.uri.fsPath, visited, typeSeen, memberSeen, funcSeen, allTypes, allMembers, allFunctions);
+    return { allTypes, allMembers, allFunctions };
+}
+
 // ── Semantic tokens provider ───────────────────────────────────────────────
 
 export class BeguileSemanticTokensProvider implements vscode.DocumentSemanticTokensProvider {
@@ -299,33 +335,7 @@ export class BeguileSemanticTokensProvider implements vscode.DocumentSemanticTok
         const builder = new vscode.SemanticTokensBuilder(tokenLegend);
         const lines = Array.from({ length: document.lineCount }, (_, i) => document.lineAt(i).text);
 
-        // Shared seen-sets ensure names declared in the current file take
-        // precedence over identically-named declarations in included files.
-        const typeSeen:   Set<string> = new Set();
-        const memberSeen: Set<string> = new Set();
-        const funcSeen:   Set<string> = new Set();
-
-        const allTypes:     TypeInfo[]     = collectDeclarations(lines, typeSeen);
-        const allMembers:   MemberInfo[]   = collectMembers(lines, memberSeen);
-        const allFunctions: FunctionInfo[] = collectFunctions(lines, funcSeen);
-
-        // Always scan _beguileCore.bgl first — it is implicitly available in
-        // every Beguile file without an explicit #include.
-        const visited = new Set<string>([document.uri.fsPath]);
-        const coreFile = await findCoreLibrary();
-        if (coreFile && !visited.has(coreFile)) {
-            visited.add(coreFile);
-            try {
-                const coreLines = fs.readFileSync(coreFile, 'utf8').split('\n');
-                allTypes.push(...collectDeclarations(coreLines, typeSeen));
-                allMembers.push(...collectMembers(coreLines, memberSeen));
-                allFunctions.push(...collectFunctions(coreLines, funcSeen));
-                await collectFromIncludes(coreLines, coreFile, visited, typeSeen, memberSeen, funcSeen, allTypes, allMembers, allFunctions);
-            } catch { /* core not found, continue */ }
-        }
-
-        // Scan files referenced by explicit #include directives
-        await collectFromIncludes(lines, document.uri.fsPath, visited, typeSeen, memberSeen, funcSeen, allTypes, allMembers, allFunctions);
+        const { allTypes, allMembers, allFunctions } = await collectAllSymbols(document);
 
         if (allTypes.length === 0 && allMembers.length === 0 && allFunctions.length === 0) return builder.build();
 
