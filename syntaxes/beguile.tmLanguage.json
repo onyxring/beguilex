@@ -122,8 +122,7 @@
     },
 
     "interpolated-strings": {
-      "comment": "Interpolated string literal: $\"text {expr} text\". Must be listed before plain strings so $\" is caught first.",
-      "name": "string.quoted.double.interpolated.beguile",
+      "comment": "Interpolated string literal: $\"text {expr} text\". Outer rule has no name so {expr} spans inherit code colors, not string color.",
       "begin": "(\\$)(\")",
       "end": "\"",
       "beginCaptures": {
@@ -135,9 +134,9 @@
       },
       "patterns": [
         {
-          "comment": "Interpolated expression span: { ... }",
+          "comment": "Interpolated expression span: { ... }. Negative lookbehind prevents \\{ escape from triggering.",
           "name": "meta.interpolation.beguile",
-          "begin": "\\{",
+          "begin": "(?<!\\\\)\\{",
           "end": "\\}",
           "beginCaptures": { "0": { "name": "punctuation.section.interpolation.begin.beguile" } },
           "endCaptures": { "0": { "name": "punctuation.section.interpolation.end.beguile" } },
@@ -146,8 +145,14 @@
           ]
         },
         {
-          "name": "constant.character.escape.beguile",
+          "comment": "Escape sequences. Dual scope includes string.* so VSCode bracket-pair colorizer ignores { here.",
+          "name": "string.quoted.double.interpolated.beguile constant.character.escape.beguile",
           "match": "\\\\[\"\\\\n^~@{]"
+        },
+        {
+          "comment": "Literal string content between interpolation spans",
+          "name": "string.quoted.double.interpolated.beguile",
+          "match": "[^{\"\\\\]+"
         }
       ]
     },
@@ -268,7 +273,7 @@
 
     "keywords-control": {
       "name": "keyword.control.beguile",
-      "match": "\\b(if|else|for|while|do|switch|case|default|break|continue|return|in)\\b"
+      "match": "\\b(if|else|for|while|do|switch|case|default|break|continue|return|rtrue|rfalse|in)\\b"
     },
 
     "keywords-declaration": {
@@ -288,7 +293,7 @@
 
     "constants-language": {
       "name": "constant.language.beguile",
-      "match": "\\b(true|false|null)\\b"
+      "match": "\\b(true|false|null|selfobj|nothing|thedark)\\b"
     },
 
     "keyword-self": {

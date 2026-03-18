@@ -27,7 +27,8 @@
         "scopeName": "source.beguile",
         "path": "./syntaxes/beguile.tmLanguage.json",
         "embeddedLanguages": {
-          "meta.embedded.block.i6.beguile": "inform6"
+          "meta.embedded.block.i6.beguile": "inform6",
+          "meta.embedded.emitter.i6.beguile": "inform6"
         }
       }
     ],
@@ -49,15 +50,19 @@
     "semanticTokenScopes": [
       {
         "scopes": {
-          "class": ["entity.name.type.class.beguile"],
-          "class.declaration": ["entity.name.type.class.beguile"],
-          "enum": ["entity.name.type.enum.beguile"],
-          "enum.declaration": ["entity.name.type.enum.beguile"],
-          "property": ["variable.other.property.beguile"],
-          "property.declaration": ["variable.other.property.beguile"],
-          "method": ["entity.name.function.member.beguile"],
-          "method.declaration": ["entity.name.function.member.beguile"],
-          "type": ["entity.name.type.beguile"]
+          "type":                 ["entity.name.type"],
+          "class":                ["entity.name.type.class"],
+          "class.declaration":    ["entity.name.type.class"],
+          "enum":                 ["entity.name.type.enum"],
+          "enum.declaration":     ["entity.name.type.enum"],
+          "enumMember":           ["variable.other.enummember"],
+          "variable":             ["variable.other.readwrite"],
+          "property":             ["variable.other.property"],
+          "property.declaration": ["variable.other.property"],
+          "method":               ["entity.name.function.member"],
+          "method.declaration":   ["entity.name.function.member"],
+          "function":             ["entity.name.function"],
+          "function.declaration": ["entity.name.function"]
         }
       }
     ]

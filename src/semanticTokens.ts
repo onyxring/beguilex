@@ -6,23 +6,62 @@ import * as path from 'path';
 // Token types and modifiers exposed to VSCode
 // 'type' is used for class/object name usages (non-declaration sites) so
 // themes that don't style 'class' usage separately still show a color.
-const tokenTypes = ['class', 'enum', 'property', 'method', 'type', 'function'];
+const tokenTypes = ['class', 'enum', 'enumMember', 'variable', 'property', 'method', 'type', 'function'];
 const tokenModifiers = ['declaration'];
 export const tokenLegend = new vscode.SemanticTokensLegend(tokenTypes, tokenModifiers);
 
 // Type declaration: (optional modifiers) (keyword) (name)
 const DECL_RE = /^\s*(?:extern\s+|emitter\s+|alias\s+)*\b(class|object|enum|bnum)\s+([a-zA-Z_][a-zA-Z0-9_]*)/;
 
+// Single-line extern declaration: extern [const] <typeKeyword> <name>;
+// Handles verb, grammarToken, attribute, int, var, and extern class instances.
+const EXTERN_SINGLE_RE = /^\s*extern\s+(const\s+)?([a-zA-Z_][a-zA-Z0-9_]*)\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*;/;
+
+// Top-level const declaration: const <type> <name> = ...
+const CONST_DECL_RE = /^\s*const\s+([a-zA-Z_][a-zA-Z0-9_<>]*)\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*(?:=|;)/;
+
 // Member declaration inside a class/object body:
 // optional modifiers, return type, member name, then '(' (method) or ';' (property)
-const MEMBER_DECL_RE = /^\s*(?:(?:extern|emitter|replace|const|array)\s+)*\b([a-zA-Z_][a-zA-Z0-9_<>]*)\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*(\(|;)/;
+const MEMBER_DECL_RE = /^\s*(?:(?:extern|emitter|replace|const|array)\s+)*\b([a-zA-Z_][a-zA-Z0-9_<>]*)\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*(?:=\s*(?:\{[^}]*\}|[^;{(]*))?(\(|;)/;
 
 // Body-opener for collectMembers — broader than DECL_RE: also matches
 // 'extend class Foo' so that members added via extension are included.
-const BODY_OPENER_RE = /^\s*(?:extern\s+|emitter\s+|alias\s+|extend\s+)*\b(class|object)\s+([a-zA-Z_][a-zA-Z0-9_]*)/;
+// Positive lookahead (?=\s*[{:]) requires the name to be immediately followed
+// by a brace or colon (type body / inheritance), preventing false matches on
+// method/property declarations like `emitter object operator = (...)` or
+// `emitter object parent()`. A negative lookahead was tried first but caused
+// backtracking: the engine would shrink the name capture (e.g. `operato`)
+// until the lookahead passed at a mid-identifier position.
+const BODY_OPENER_RE = /^\s*(?:extern\s+|emitter\s+|alias\s+|extend\s+)*\b(class|object)\s+([a-zA-Z_][a-zA-Z0-9_]*)(?=\s*[{:])/;
+
+// User-defined type instance body opener: `TypeName instanceName {`
+// Used as a fallback when BODY_OPENER_RE doesn't match but the first identifier
+// is a known user-defined type (e.g. `worldObject foyer {`).
+const TYPED_INSTANCE_RE = /^\s*([a-zA-Z_][a-zA-Z0-9_]*)(?:<[^>]*>)?\s+([a-zA-Z_][a-zA-Z0-9_]*)(?=\s*[{:])/;
+
+// Bare inherited property assignment inside a class/object body: `identifier =` or `identifier[`
+// No preceding type keyword — the property is inherited from a parent type.
+const BARE_ASSIGN_RE = /^\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*(?:=|\[)/;
 
 // #include <name> or #include "path"  (not #includeI6 — those are raw I6 files)
 const INCLUDE_RE = /^\s*#?include\s*(?:<([^>]+)>|"([^"]+)")/;
+
+// Beguile reserved words — never emit semantic tokens for these even if a
+// library happens to declare a type with the same name (e.g. `class object`).
+// Grammar rules already color them; semantic tokens must not override that.
+const BEGUILE_KEYWORDS = new Set([
+    // type declaration keywords
+    'class', 'enum', 'bnum', 'verb', 'grammar', 'attribute',
+    // declaration modifiers
+    'extern', 'extend', 'emitter', 'replace', 'const', 'alias',
+    // primitive types
+    'int', 'bool', 'string', 'char', 'void', 'var', 'array', 'func', 'eBool', 'dictionaryWord',
+    // control flow
+    'if', 'else', 'for', 'while', 'do', 'return', 'break', 'continue',
+    'switch', 'case', 'default', 'new', 'delete', 'this', 'null', 'true', 'false',
+    // beguile special
+    'rtrue', 'rfalse',
+]);
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -77,7 +116,7 @@ function reEsc(s: string): string {
 
 interface TypeInfo {
     name: string;
-    tokenType: 'class' | 'enum';
+    tokenType: 'class' | 'enum' | 'enumMember' | 'variable';
     declFile: string;
     declLine: number;
     declCol: number;
@@ -105,28 +144,87 @@ interface FunctionInfo {
 
 // ── Declaration collectors ─────────────────────────────────────────────────
 
-function collectDeclarations(lines: string[], seen: Set<string>, filePath: string): TypeInfo[] {
+function collectDeclarations(lines: string[], seen: Set<string>, filePath: string, typeNames?: Set<string>): TypeInfo[] {
     const types: TypeInfo[] = [];
+    // knownTypes accumulates class names seen so far in this file so that
+    // user-defined type instance declarations later in the same file are recognised
+    // (e.g. `worldObject foyer {` after `alias class worldObject : object {`).
+    const knownTypes = typeNames ?? new Set<string>();
+    let depth = 0;
     for (let i = 0; i < lines.length; i++) {
         const stripped = stripComments(lines[i]);
-        const m = DECL_RE.exec(stripped);
-        if (!m) continue;
-        const keyword = m[1];
-        const name = m[2];
-        if (seen.has(name)) continue;
-        seen.add(name);
-        const tokenType: 'class' | 'enum' =
-            (keyword === 'enum' || keyword === 'bnum') ? 'enum' : 'class';
-        const col = lines[i].indexOf(
-            name,
-            lines[i].search(/\b(?:class|object|enum|bnum)\b/) + keyword.length
-        );
-        types.push({ name, tokenType, declFile: filePath, declLine: i, declCol: col });
+
+        // Only collect top-level (depth 0) declarations — property declarations
+        // inside class/object bodies look identical to type declarations otherwise
+        // (e.g. "object parent = selfobj;" would match DECL_RE at depth 1).
+        if (depth !== 0) {
+            depth += netBraceChange(stripped);
+            if (depth < 0) depth = 0;
+            continue;
+        }
+
+        const m  = DECL_RE.exec(stripped);
+        const em = m ? null : EXTERN_SINGLE_RE.exec(stripped);
+        const cm = (!m && !em) ? CONST_DECL_RE.exec(stripped) : null;
+        // Fallback: user-defined type instance, e.g. `worldObject foyer {`
+        const tm = (!m && !em && !cm) ? TYPED_INSTANCE_RE.exec(stripped) : null;
+        const isTypedInstance = !!tm && knownTypes.has(tm[1]) && !BEGUILE_KEYWORDS.has(tm[1]);
+
+        if (!m && !em && !cm && !isTypedInstance) {
+            depth += netBraceChange(stripped);
+            continue;
+        }
+
+        const name = m ? m[2] : em ? em[3] : cm ? cm[2] : tm![2];
+        if (!seen.has(name)) {
+            seen.add(name);
+            let tokenType: 'class' | 'enum' | 'enumMember' | 'variable';
+            let col: number;
+            if (isTypedInstance) {
+                // User-defined type instance — same visual treatment as `object` instances
+                tokenType = 'variable';
+                col = lines[i].indexOf(name, lines[i].indexOf(tm![1]) + tm![1].length);
+            } else if (m) {
+                const keyword = m[1];
+                // If the line has `extern` and ends with `;` it is an extern instance
+                // declaration (e.g. `extern object selfobj;`), not a type definition.
+                // Use `variable` for object/class keywords and `enumMember` for enums
+                // so that instances are differentiated from type names visually.
+                const isExternInstance = /\bextern\b/.test(stripped) && stripped.trimEnd().endsWith(';');
+                if (keyword === 'enum' || keyword === 'bnum') {
+                    tokenType = isExternInstance ? 'enumMember' : 'enum';
+                } else if (keyword === 'object') {
+                    // `object` always declares an instance (even with an inline body),
+                    // never a type definition — use variable color to match extern instances.
+                    tokenType = 'variable';
+                } else {
+                    // `class` is a true type definition — add to knownTypes so that
+                    // instances of this class later in the file are also recognised.
+                    tokenType = isExternInstance ? 'variable' : 'class';
+                    if (tokenType === 'class') knownTypes.add(name);
+                }
+                col = lines[i].indexOf(name, lines[i].search(/\b(?:class|object|enum|bnum)\b/) + keyword.length);
+            } else if (cm) {
+                // Top-level const — always a named constant
+                tokenType = 'enumMember';
+                col = lines[i].lastIndexOf(name);
+            } else {
+                const isConst = !!em![1];
+                const typeKw  = em![2];
+                tokenType = (typeKw === 'grammarToken' || typeKw === 'attribute' || isConst)
+                    ? 'enumMember' : 'variable';
+                col = lines[i].lastIndexOf(name);
+            }
+            types.push({ name, tokenType, declFile: filePath, declLine: i, declCol: col >= 0 ? col : 0 });
+        }
+
+        depth += netBraceChange(stripped);
+        if (depth < 0) depth = 0;
     }
     return types;
 }
 
-function collectMembers(lines: string[], seen: Set<string>, filePath: string): MemberInfo[] {
+function collectMembers(lines: string[], seen: Set<string>, filePath: string, typeNames?: Set<string>): MemberInfo[] {
     const members: MemberInfo[] = [];
     let depth = 0;
     let classBodyDepth = -1;
@@ -141,14 +239,29 @@ function collectMembers(lines: string[], seen: Set<string>, filePath: string): M
         if (i6Open && i6Depth === -1) i6Depth = depth;
 
         const delta = netBraceChange(stripped);
-        const declMatch = BODY_OPENER_RE.exec(stripped);
+
+        // Determine if this line opens a class/object body.
+        // First try the keyword form (class/object); then fall back to a
+        // user-defined type instance form (e.g. `worldObject foyer {`) when
+        // a typeNames set is provided.
+        let bodyOpenerKw: string | null = null;
+        let bodyOpenerName: string | null = null;
+        const bm = BODY_OPENER_RE.exec(stripped);
+        if (bm) {
+            bodyOpenerKw = bm[1]; bodyOpenerName = bm[2];
+        } else if (typeNames) {
+            const tm = TYPED_INSTANCE_RE.exec(stripped);
+            if (tm && typeNames.has(tm[1]) && !BEGUILE_KEYWORDS.has(tm[1])) {
+                bodyOpenerKw = 'object'; bodyOpenerName = tm[2];
+            }
+        }
 
         // Check for members BEFORE updating depth — a member lives at
         // classBodyDepth, measured at the START of the line (before any
         // braces on this line are counted). Checking after the update would
         // cause method declarations like `int hello(){` (delta=1) to be
         // checked at depth+1, missing them entirely.
-        if (classBodyDepth !== -1 && depth === classBodyDepth && i6Depth === -1 && !declMatch) {
+        if (classBodyDepth !== -1 && depth === classBodyDepth && i6Depth === -1 && !bodyOpenerKw) {
             const mm = MEMBER_DECL_RE.exec(stripped);
             if (mm) {
                 const name = mm[2];
@@ -171,12 +284,9 @@ function collectMembers(lines: string[], seen: Set<string>, filePath: string): M
         }
 
         // Update classBodyDepth if this line opens a class/object body
-        if (declMatch && delta > 0 && i6Depth === -1) {
-            const kw = declMatch[1];
-            if (kw === 'class' || kw === 'object') {
-                classBodyDepth = depth + delta;
-                currentClassName = declMatch[2];
-            }
+        if (bodyOpenerKw && delta > 0 && i6Depth === -1) {
+            classBodyDepth = depth + delta;
+            currentClassName = bodyOpenerName!;
         }
 
         if (i6Depth !== -1) {
@@ -192,6 +302,75 @@ function collectMembers(lines: string[], seen: Set<string>, filePath: string): M
         }
     }
     return members;
+}
+
+// Scan a single file for ALL member declaration positions without deduplication.
+// Used to build memberDeclByLine so that the same method name declared in
+// multiple classes (e.g. `before` in both `bar` and `cloak`) gets highlighted
+// at every declaration site, not just the first one seen.
+interface DeclPos { line: number; col: number; name: string; tokenType: 'method' | 'property'; }
+function findMemberDeclPositions(lines: string[], typeNames?: Set<string>): DeclPos[] {
+    const result: DeclPos[] = [];
+    let depth = 0;
+    let classBodyDepth = -1;
+    let i6Depth = -1;
+
+    for (let i = 0; i < lines.length; i++) {
+        const raw = lines[i];
+        const stripped = stripComments(raw);
+
+        const i6Open = /^\s*#i6(?:raw)?\s*\{/.test(stripped);
+        if (i6Open && i6Depth === -1) i6Depth = depth;
+
+        const delta = netBraceChange(stripped);
+
+        let bodyOpenerKw: string | null = null;
+        const bm = BODY_OPENER_RE.exec(stripped);
+        if (bm) {
+            bodyOpenerKw = bm[1];
+        } else if (typeNames) {
+            const tm = TYPED_INSTANCE_RE.exec(stripped);
+            if (tm && typeNames.has(tm[1]) && !BEGUILE_KEYWORDS.has(tm[1])) {
+                bodyOpenerKw = 'object';
+            }
+        }
+
+        if (classBodyDepth !== -1 && depth === classBodyDepth && i6Depth === -1 && !bodyOpenerKw) {
+            const mm = MEMBER_DECL_RE.exec(stripped);
+            if (mm) {
+                const name = mm[2];
+                const isMethod = mm[3] === '(';
+                const typeStr = mm[1];
+                const typeIdx = raw.search(new RegExp('\\b' + reEsc(typeStr) + '\\b'));
+                const col = typeIdx >= 0 ? raw.indexOf(name, typeIdx + typeStr.length) : raw.indexOf(name);
+                result.push({ line: i, col: col >= 0 ? col : 0, name, tokenType: isMethod ? 'method' : 'property' });
+            } else {
+                // Bare inherited property assignment: `attributes = {...}` — no type keyword
+                const bm2 = BARE_ASSIGN_RE.exec(stripped);
+                if (bm2) {
+                    const name = bm2[1];
+                    const col = raw.indexOf(name);
+                    result.push({ line: i, col: col >= 0 ? col : 0, name, tokenType: 'property' });
+                }
+            }
+        }
+
+        if (bodyOpenerKw && delta > 0 && i6Depth === -1) {
+            classBodyDepth = depth + delta;
+        }
+
+        if (i6Depth !== -1) {
+            depth += delta;
+            if (depth <= i6Depth) i6Depth = -1;
+        } else {
+            depth += delta;
+        }
+
+        if (classBodyDepth !== -1 && depth < classBodyDepth) {
+            classBodyDepth = -1;
+        }
+    }
+    return result;
 }
 
 function collectFunctions(lines: string[], seen: Set<string>, filePath: string): FunctionInfo[] {
@@ -240,25 +419,41 @@ function collectFunctions(lines: string[], seen: Set<string>, filePath: string):
 
 // ── Include resolution ─────────────────────────────────────────────────────
 
-// Locate a system include (<name>) by searching the workspace for name.bgl
-// inside any beguiLib directory (or any .bgl matching the name).
-async function findSystemInclude(name: string): Promise<string | null> {
-    const withExt = name.endsWith('.bgl') ? name : `${name}.bgl`;
-    const direct = await vscode.workspace.findFiles(`**/beguiLib/${withExt}`, undefined, 1);
-    if (direct.length > 0) return direct[0].fsPath;
-    const inSubdir = await vscode.workspace.findFiles(`**/beguiLib/**/${withExt}`, undefined, 1);
-    if (inSubdir.length > 0) return inSubdir[0].fsPath;
-    const anywhere = await vscode.workspace.findFiles(`**/${withExt}`, '**/node_modules/**', 1);
-    if (anywhere.length > 0) return anywhere[0].fsPath;
+// Resolved-path cache — avoids repeated synchronous fs.existsSync scans for
+// the same include name across multiple document versions or provider calls.
+const resolvedPathCache = new Map<string, string | null>();
+
+// Walk every workspace folder and return the first existing path that matches
+// one of the candidate sub-paths (checked synchronously).
+function findInWorkspaceFolders(...subPaths: string[]): string | null {
+    for (const folder of vscode.workspace.workspaceFolders ?? []) {
+        for (const sub of subPaths) {
+            const candidate = path.join(folder.uri.fsPath, sub);
+            if (fs.existsSync(candidate)) return candidate;
+        }
+    }
     return null;
 }
 
+// Locate a system include (<name>) by searching workspace folders synchronously.
+function findSystemInclude(name: string): string | null {
+    if (resolvedPathCache.has(name)) return resolvedPathCache.get(name)!;
+
+    const withExt = name.endsWith('.bgl') ? name : `${name}.bgl`;
+
+    const result = findInWorkspaceFolders(
+        path.join('beguile', 'beguiLib', withExt),
+        path.join('inform6', 'beguilib', withExt),
+        path.join('beguiLib', withExt),
+        withExt
+    );
+    resolvedPathCache.set(name, result);
+    return result;
+}
+
 // Locate _beguileCore.bgl using the configured libraryPath setting first,
-// then falling back to a workspace search. This mirrors the compiler's own
-// library resolution: in dev mode the lib sits next to the source tree; in
-// release mode it sits next to the beguiler executable. The setting lets the
-// user point at either location explicitly.
-async function findCoreLibrary(): Promise<string | null> {
+// then falling back to a synchronous workspace search.
+function findCoreLibrary(): string | null {
     const config  = vscode.workspace.getConfiguration('beguile');
     const libPath = config.get<string>('libraryPath');
 
@@ -269,13 +464,12 @@ async function findCoreLibrary(): Promise<string | null> {
         if (fs.existsSync(candidate)) return candidate;
     }
 
-    // Auto-detect: search workspace for _beguileCore.bgl
     return findSystemInclude('_beguileCore');
 }
 
 // Recursively walk #include directives, collecting declarations and members
 // from each referenced file. `visited` prevents cycles.
-async function collectFromIncludes(
+function collectFromIncludes(
     lines: string[],
     currentFilePath: string,
     visited: Set<string>,
@@ -284,8 +478,9 @@ async function collectFromIncludes(
     funcSeen: Set<string>,
     allTypes: TypeInfo[],
     allMembers: MemberInfo[],
-    allFunctions: FunctionInfo[]
-): Promise<void> {
+    allFunctions: FunctionInfo[],
+    typeNames: Set<string>
+): void {
     for (const line of lines) {
         const m = INCLUDE_RE.exec(line);
         if (!m) continue;
@@ -295,7 +490,7 @@ async function collectFromIncludes(
 
         let resolved: string | null = null;
         if (isSystem) {
-            resolved = await findSystemInclude(name);
+            resolved = findSystemInclude(name);
         } else {
             const candidate = path.resolve(path.dirname(currentFilePath), name);
             resolved = fs.existsSync(candidate) ? candidate : null;
@@ -309,10 +504,12 @@ async function collectFromIncludes(
         catch { continue; }
 
         const fileLines = content.split('\n');
-        allTypes.push(...collectDeclarations(fileLines, typeSeen, resolved));
-        allMembers.push(...collectMembers(fileLines, memberSeen, resolved));
+        const newTypes = collectDeclarations(fileLines, typeSeen, resolved, typeNames);
+        allTypes.push(...newTypes);
+        for (const t of newTypes) typeNames.add(t.name);
+        allMembers.push(...collectMembers(fileLines, memberSeen, resolved, typeNames));
         allFunctions.push(...collectFunctions(fileLines, funcSeen, resolved));
-        await collectFromIncludes(fileLines, resolved, visited, typeSeen, memberSeen, funcSeen, allTypes, allMembers, allFunctions);
+        collectFromIncludes(fileLines, resolved, visited, typeSeen, memberSeen, funcSeen, allTypes, allMembers, allFunctions, typeNames);
     }
 }
 
@@ -325,32 +522,50 @@ export interface SymbolCollection {
     membersByClass: Map<string, MemberInfo[]>;
 }
 
+// Cache computed SymbolCollections keyed by `filePath@version` so concurrent
+// provider calls for the same document version share one result.
+const symbolCache = new Map<string, SymbolCollection>();
+
 export async function collectAllSymbols(document: vscode.TextDocument): Promise<SymbolCollection> {
+    const key = `${document.uri.fsPath}@${document.version}`;
+    if (!symbolCache.has(key)) {
+        symbolCache.set(key, _collectAllSymbols(document));
+    }
+    return symbolCache.get(key)!;
+}
+
+function _collectAllSymbols(document: vscode.TextDocument): SymbolCollection {
     const lines = Array.from({ length: document.lineCount }, (_, i) => document.lineAt(i).text);
 
     const typeSeen:   Set<string> = new Set();
     const memberSeen: Set<string> = new Set();
     const funcSeen:   Set<string> = new Set();
+    // Accumulated set of all known type names — passed to collectMembers so that
+    // user-defined type instance bodies (e.g. `worldObject foyer {`) are recognised.
+    const typeNames:  Set<string> = new Set();
 
     const docPath = document.uri.fsPath;
-    const allTypes:     TypeInfo[]     = collectDeclarations(lines, typeSeen, docPath);
-    const allMembers:   MemberInfo[]   = collectMembers(lines, memberSeen, docPath);
+    const allTypes:     TypeInfo[]     = collectDeclarations(lines, typeSeen, docPath, typeNames);
+    for (const t of allTypes) typeNames.add(t.name);
+    const allMembers:   MemberInfo[]   = collectMembers(lines, memberSeen, docPath, typeNames);
     const allFunctions: FunctionInfo[] = collectFunctions(lines, funcSeen, docPath);
 
     const visited = new Set<string>([docPath]);
-    const coreFile = await findCoreLibrary();
+    const coreFile = findCoreLibrary();
     if (coreFile && !visited.has(coreFile)) {
         visited.add(coreFile);
         try {
             const coreLines = fs.readFileSync(coreFile, 'utf8').split('\n');
-            allTypes.push(...collectDeclarations(coreLines, typeSeen, coreFile));
-            allMembers.push(...collectMembers(coreLines, memberSeen, coreFile));
+            const coreTypes = collectDeclarations(coreLines, typeSeen, coreFile, typeNames);
+            allTypes.push(...coreTypes);
+            for (const t of coreTypes) typeNames.add(t.name);
+            allMembers.push(...collectMembers(coreLines, memberSeen, coreFile, typeNames));
             allFunctions.push(...collectFunctions(coreLines, funcSeen, coreFile));
-            await collectFromIncludes(coreLines, coreFile, visited, typeSeen, memberSeen, funcSeen, allTypes, allMembers, allFunctions);
+            collectFromIncludes(coreLines, coreFile, visited, typeSeen, memberSeen, funcSeen, allTypes, allMembers, allFunctions, typeNames);
         } catch { /* core not found */ }
     }
 
-    await collectFromIncludes(lines, document.uri.fsPath, visited, typeSeen, memberSeen, funcSeen, allTypes, allMembers, allFunctions);
+    collectFromIncludes(lines, document.uri.fsPath, visited, typeSeen, memberSeen, funcSeen, allTypes, allMembers, allFunctions, typeNames);
 
     // Build membersByClass map by grouping allMembers by className
     const membersByClass = new Map<string, MemberInfo[]>();
@@ -361,7 +576,7 @@ export async function collectAllSymbols(document: vscode.TextDocument): Promise<
     }
 
     return { allTypes, allMembers, allFunctions, membersByClass };
-}
+}  // end _collectAllSymbols
 
 // ── Semantic tokens provider ───────────────────────────────────────────────
 
@@ -375,23 +590,48 @@ export class BeguileSemanticTokensProvider implements vscode.DocumentSemanticTok
         if (allTypes.length === 0 && allMembers.length === 0 && allFunctions.length === 0) return builder.build();
 
         // ── Build lookup maps ──────────────────────────────────────────────
-        const typeMap     = new Map<string, TypeInfo>(allTypes.map(t => [t.name, t]));
-        const memberMap   = new Map<string, MemberInfo>(allMembers.map(m => [m.name, m]));
-        const functionMap = new Map<string, FunctionInfo>(allFunctions.map(f => [f.name, f]));
+        // Exclude reserved keywords from semantic type matching — they get
+        // grammar colors and must not be overridden by semantic tokens.
+        const filteredTypes = allTypes.filter(t => !BEGUILE_KEYWORDS.has(t.name));
 
-        const typePattern = allTypes.length > 0
-            ? new RegExp(`\\b(${allTypes.map(t => reEsc(t.name)).join('|')})\\b`, 'g')
+        const filteredMembers   = allMembers.filter(m => !BEGUILE_KEYWORDS.has(m.name));
+        const filteredFunctions = allFunctions.filter(f => !BEGUILE_KEYWORDS.has(f.name));
+
+        const typeMap     = new Map<string, TypeInfo>(filteredTypes.map(t => [t.name, t]));
+        const memberMap   = new Map<string, MemberInfo>(filteredMembers.map(m => [m.name, m]));
+        const functionMap = new Map<string, FunctionInfo>(filteredFunctions.map(f => [f.name, f]));
+
+        const typePattern = filteredTypes.length > 0
+            ? new RegExp(`\\b(${filteredTypes.map(t => reEsc(t.name)).join('|')})\\b`, 'g')
             : null;
 
-        const memberPattern = allMembers.length > 0
-            ? new RegExp(`\\.(${allMembers.map(m => reEsc(m.name)).join('|')})\\b`, 'g')
+        const memberPattern = filteredMembers.length > 0
+            ? new RegExp(`\\.(${filteredMembers.map(m => reEsc(m.name)).join('|')})\\b`, 'g')
             : null;
 
-        const functionPattern = allFunctions.length > 0
-            ? new RegExp(`\\b(${allFunctions.map(f => reEsc(f.name)).join('|')})\\b`, 'g')
+        const functionPattern = filteredFunctions.length > 0
+            ? new RegExp(`\\b(${filteredFunctions.map(f => reEsc(f.name)).join('|')})\\b`, 'g')
             : null;
+
+        // Member declaration sites — built from a no-dedup scan of the current
+        // document so that the same method name in multiple classes (e.g. `before`
+        // in both `bar` and `cloak`) gets highlighted at every declaration site.
+        const typeNameSet = new Set(allTypes.map(t => t.name));
+        const memberDeclByLine = new Map<number, DeclPos[]>();
+        for (const decl of findMemberDeclPositions(lines, typeNameSet)) {
+            if (memberMap.has(decl.name) && !BEGUILE_KEYWORDS.has(decl.name)) {
+                const list = memberDeclByLine.get(decl.line) ?? [];
+                list.push(decl);
+                memberDeclByLine.set(decl.line, list);
+            }
+        }
 
         // ── Emit tokens line by line (current document only) ──────────────
+        // Tokens within a line are collected into a per-line array, sorted by
+        // col, and deduplicated before pushing — SemanticTokensBuilder requires
+        // strictly ascending (line, col) order across all push() calls.
+        type PendingToken = [col: number, len: number, typeIdx: number, mod: number];
+
         for (let lineIdx = 0; lineIdx < lines.length; lineIdx++) {
             const raw = lines[lineIdx];
             if (/^\s*\/\//.test(raw)) continue;
@@ -399,6 +639,12 @@ export class BeguileSemanticTokensProvider implements vscode.DocumentSemanticTok
 
             const stripped  = stripComments(raw);
             const strRanges = stringRanges(stripped);
+            const pending: PendingToken[] = [];
+
+            const emit = (col: number, len: number, typeName: string, mod: number) => {
+                const idx = tokenTypes.indexOf(typeName);
+                if (idx >= 0) pending.push([col, len, idx, mod]);
+            };
 
             // Type name tokens
             if (typePattern) {
@@ -407,19 +653,18 @@ export class BeguileSemanticTokensProvider implements vscode.DocumentSemanticTok
                 while ((m = typePattern.exec(stripped)) !== null) {
                     const col = m.index;
                     if (inRange(col, strRanges)) continue;
+                    if (col > 0 && stripped[col - 1] === '.') continue;  // skip .TypeName (dictionary word context)
                     const info = typeMap.get(m[1])!;
                     const isDecl = lineIdx === info.declLine && col === info.declCol;
-                    // Declaration site: use 'class' or 'enum' with declaration modifier.
-                    // Usage site: use 'type' — universally colored by themes that may
-                    // not apply a visible style to 'class' without the declaration modifier.
-                    const emitType = isDecl ? info.tokenType : 'type';
-                    builder.push(lineIdx, col, m[1].length,
-                        tokenTypes.indexOf(emitType),
+                    const emitType = isDecl ? info.tokenType
+                        : (info.tokenType === 'class' || info.tokenType === 'enum') ? 'type'
+                        : info.tokenType;
+                    emit(col, m[1].length, emitType,
                         isDecl ? (1 << tokenModifiers.indexOf('declaration')) : 0);
                 }
             }
 
-            // Function tokens: bare 'name(' not preceded by '.' (not a member call)
+            // Function tokens: bare 'name' not preceded by '.' (not a member call)
             if (functionPattern) {
                 functionPattern.lastIndex = 0;
                 let m: RegExpExecArray | null;
@@ -429,13 +674,23 @@ export class BeguileSemanticTokensProvider implements vscode.DocumentSemanticTok
                     if (col > 0 && stripped[col - 1] === '.') continue;
                     const info = functionMap.get(m[1])!;
                     const isDecl = lineIdx === info.declLine && col === info.declCol;
-                    builder.push(lineIdx, col, m[1].length,
-                        tokenTypes.indexOf('function'),
+                    emit(col, m[1].length, 'function',
                         isDecl ? (1 << tokenModifiers.indexOf('declaration')) : 0);
                 }
             }
 
-            // Member tokens: '.memberName' after an alphanumeric or ')'
+            // Member declaration tokens (bare name at declaration site — no dot prefix)
+            const memberDecls = memberDeclByLine.get(lineIdx);
+            if (memberDecls) {
+                for (const decl of memberDecls) {
+                    if (!inRange(decl.col, strRanges)) {
+                        emit(decl.col, decl.name.length, decl.tokenType,
+                            1 << tokenModifiers.indexOf('declaration'));
+                    }
+                }
+            }
+
+            // Member usage tokens: '.memberName' after an alphanumeric or ')'
             if (memberPattern) {
                 memberPattern.lastIndex = 0;
                 let m: RegExpExecArray | null;
@@ -447,10 +702,17 @@ export class BeguileSemanticTokensProvider implements vscode.DocumentSemanticTok
                     if (!/[a-zA-Z0-9_)]/.test(preceding)) continue;
                     if (inRange(nameCol, strRanges)) continue;
                     const info = memberMap.get(name)!;
-                    const isDecl = lineIdx === info.declLine && nameCol === info.declCol;
-                    builder.push(lineIdx, nameCol, name.length,
-                        tokenTypes.indexOf(info.tokenType),
-                        isDecl ? (1 << tokenModifiers.indexOf('declaration')) : 0);
+                    emit(nameCol, name.length, info.tokenType, 0);
+                }
+            }
+
+            // Sort by col, deduplicate overlapping ranges, then push to builder
+            pending.sort((a, b) => a[0] - b[0]);
+            let lastEnd = -1;
+            for (const [col, len, typeIdx, mod] of pending) {
+                if (col >= lastEnd) {
+                    builder.push(lineIdx, col, len, typeIdx, mod);
+                    lastEnd = col + len;
                 }
             }
         }
