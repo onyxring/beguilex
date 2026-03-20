@@ -13,9 +13,9 @@ export const tokenLegend = new vscode.SemanticTokensLegend(tokenTypes, tokenModi
 // Type declaration: (optional modifiers) (keyword) (name)
 const DECL_RE = /^\s*(?:extern\s+|emitter\s+|alias\s+)*\b(class|object|enum|bnum)\s+([a-zA-Z_][a-zA-Z0-9_]*)/;
 
-// Single-line extern declaration: extern [const] <typeKeyword> <name>;
+// Single-line extern declaration: extern [const] <typeKeyword> <name> [as <alias>];
 // Handles verb, grammarToken, attribute, int, var, and extern class instances.
-const EXTERN_SINGLE_RE = /^\s*extern\s+(const\s+)?([a-zA-Z_][a-zA-Z0-9_]*)\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*;/;
+const EXTERN_SINGLE_RE = /^\s*extern\s+(const\s+)?([a-zA-Z_][a-zA-Z0-9_]*)\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*(?:as\s+[a-zA-Z_][a-zA-Z0-9_]*)?\s*;/;
 
 // Top-level const declaration: const <type> <name> = ...
 const CONST_DECL_RE = /^\s*const\s+([a-zA-Z_][a-zA-Z0-9_<>]*)\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*(?:=|;)/;
@@ -92,14 +92,53 @@ function stringRanges(line: string): [number, number][] {
     let i = 0;
     while (i < line.length) {
         if (line[i] === '"') {
-            const start = i++;
-            while (i < line.length && line[i] !== '"') {
-                if (line[i] === '\\') i++;
+            const isInterpolated = i > 0 && line[i - 1] === '$';
+            if (isInterpolated) {
+                // Interpolated string $"...{expr}...": mark literal segments as string ranges;
+                // skip {expr} regions (they are code), but mark sub-strings inside them.
+                i++; // past opening "
+                let segStart = i;
+                let braceDepth = 0;
+                while (i < line.length) {
+                    if (braceDepth === 0) {
+                        if (line[i] === '\\') {
+                            i += 2; continue;   // \{ etc. — not a real brace
+                        } else if (line[i] === '{') {
+                            if (i > segStart) ranges.push([segStart, i - 1]);
+                            braceDepth = 1; i++; continue;
+                        } else if (line[i] === '"') {
+                            ranges.push([segStart, i]); i++; break; // end of interpolated string
+                        }
+                    } else {
+                        // Inside {expr}: track nesting; mark any sub-string literals as ranges
+                        if (line[i] === '"') {
+                            const subStart = i++;
+                            while (i < line.length && line[i] !== '"') {
+                                if (line[i] === '\\') i++;
+                                i++;
+                            }
+                            ranges.push([subStart, i]); // i is at closing "
+                        } else if (line[i] === '{') {
+                            braceDepth++;
+                        } else if (line[i] === '}') {
+                            if (--braceDepth === 0) segStart = i + 1;
+                        }
+                    }
+                    i++;
+                }
+            } else {
+                // Regular string
+                const start = i++;
+                while (i < line.length && line[i] !== '"') {
+                    if (line[i] === '\\') i++;
+                    i++;
+                }
+                ranges.push([start, i]);
                 i++;
             }
-            ranges.push([start, i]);
+        } else {
+            i++;
         }
-        i++;
     }
     return ranges;
 }
@@ -222,6 +261,39 @@ function collectDeclarations(lines: string[], seen: Set<string>, filePath: strin
         if (depth < 0) depth = 0;
     }
     return types;
+}
+
+// ── Enum value collection ──────────────────────────────────────────────────
+
+function _parseEnumBodySegment(body: string, values: string[]): void {
+    for (const tok of body.split(',')) {
+        const name = tok.split('=')[0].trim();
+        if (/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(name)) values.push(name);
+    }
+}
+
+// Parse all enum/bnum bodies in `lines` and accumulate into `out` (skips already-known enums).
+function collectEnumValues(lines: string[], out: Map<string, string[]>): void {
+    const ENUM_OPEN_RE = /^\s*(?:extern\s+)?(?:enum|bnum)\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\{/;
+    let currentEnum: string | null = null;
+    for (let i = 0; i < lines.length; i++) {
+        const stripped = stripComments(lines[i]);
+        if (currentEnum === null) {
+            const m = ENUM_OPEN_RE.exec(stripped);
+            if (m && !out.has(m[1])) {
+                currentEnum = m[1];
+                out.set(currentEnum, []);
+                const afterBrace = stripped.slice(m.index + m[0].length);
+                const closeIdx = afterBrace.indexOf('}');
+                _parseEnumBodySegment(closeIdx !== -1 ? afterBrace.slice(0, closeIdx) : afterBrace, out.get(currentEnum)!);
+                if (closeIdx !== -1) currentEnum = null;
+            }
+        } else {
+            const closeIdx = stripped.indexOf('}');
+            _parseEnumBodySegment(closeIdx !== -1 ? stripped.slice(0, closeIdx) : stripped, out.get(currentEnum)!);
+            if (closeIdx !== -1) currentEnum = null;
+        }
+    }
 }
 
 function collectMembers(lines: string[], seen: Set<string>, filePath: string, typeNames?: Set<string>): MemberInfo[] {
@@ -479,7 +551,8 @@ function collectFromIncludes(
     allTypes: TypeInfo[],
     allMembers: MemberInfo[],
     allFunctions: FunctionInfo[],
-    typeNames: Set<string>
+    typeNames: Set<string>,
+    enumValuesByEnum: Map<string, string[]>
 ): void {
     for (const line of lines) {
         const m = INCLUDE_RE.exec(line);
@@ -509,17 +582,19 @@ function collectFromIncludes(
         for (const t of newTypes) typeNames.add(t.name);
         allMembers.push(...collectMembers(fileLines, memberSeen, resolved, typeNames));
         allFunctions.push(...collectFunctions(fileLines, funcSeen, resolved));
-        collectFromIncludes(fileLines, resolved, visited, typeSeen, memberSeen, funcSeen, allTypes, allMembers, allFunctions, typeNames);
+        collectEnumValues(fileLines, enumValuesByEnum);
+        collectFromIncludes(fileLines, resolved, visited, typeSeen, memberSeen, funcSeen, allTypes, allMembers, allFunctions, typeNames, enumValuesByEnum);
     }
 }
 
 // ── Shared symbol collection ───────────────────────────────────────────────
 
 export interface SymbolCollection {
-    allTypes:       TypeInfo[];
-    allMembers:     MemberInfo[];
-    allFunctions:   FunctionInfo[];
-    membersByClass: Map<string, MemberInfo[]>;
+    allTypes:        TypeInfo[];
+    allMembers:      MemberInfo[];
+    allFunctions:    FunctionInfo[];
+    membersByClass:  Map<string, MemberInfo[]>;
+    enumValuesByEnum: Map<string, string[]>;
 }
 
 // Cache computed SymbolCollections keyed by `filePath@version` so concurrent
@@ -545,10 +620,12 @@ function _collectAllSymbols(document: vscode.TextDocument): SymbolCollection {
     const typeNames:  Set<string> = new Set();
 
     const docPath = document.uri.fsPath;
-    const allTypes:     TypeInfo[]     = collectDeclarations(lines, typeSeen, docPath, typeNames);
+    const allTypes:       TypeInfo[]          = collectDeclarations(lines, typeSeen, docPath, typeNames);
     for (const t of allTypes) typeNames.add(t.name);
-    const allMembers:   MemberInfo[]   = collectMembers(lines, memberSeen, docPath, typeNames);
-    const allFunctions: FunctionInfo[] = collectFunctions(lines, funcSeen, docPath);
+    const allMembers:     MemberInfo[]        = collectMembers(lines, memberSeen, docPath, typeNames);
+    const allFunctions:   FunctionInfo[]      = collectFunctions(lines, funcSeen, docPath);
+    const enumValuesByEnum: Map<string, string[]> = new Map();
+    collectEnumValues(lines, enumValuesByEnum);
 
     const visited = new Set<string>([docPath]);
     const coreFile = findCoreLibrary();
@@ -561,11 +638,12 @@ function _collectAllSymbols(document: vscode.TextDocument): SymbolCollection {
             for (const t of coreTypes) typeNames.add(t.name);
             allMembers.push(...collectMembers(coreLines, memberSeen, coreFile, typeNames));
             allFunctions.push(...collectFunctions(coreLines, funcSeen, coreFile));
-            collectFromIncludes(coreLines, coreFile, visited, typeSeen, memberSeen, funcSeen, allTypes, allMembers, allFunctions, typeNames);
+            collectEnumValues(coreLines, enumValuesByEnum);
+            collectFromIncludes(coreLines, coreFile, visited, typeSeen, memberSeen, funcSeen, allTypes, allMembers, allFunctions, typeNames, enumValuesByEnum);
         } catch { /* core not found */ }
     }
 
-    collectFromIncludes(lines, document.uri.fsPath, visited, typeSeen, memberSeen, funcSeen, allTypes, allMembers, allFunctions, typeNames);
+    collectFromIncludes(lines, document.uri.fsPath, visited, typeSeen, memberSeen, funcSeen, allTypes, allMembers, allFunctions, typeNames, enumValuesByEnum);
 
     // Build membersByClass map by grouping allMembers by className
     const membersByClass = new Map<string, MemberInfo[]>();
@@ -575,7 +653,7 @@ function _collectAllSymbols(document: vscode.TextDocument): SymbolCollection {
         membersByClass.set(m.className, list);
     }
 
-    return { allTypes, allMembers, allFunctions, membersByClass };
+    return { allTypes, allMembers, allFunctions, membersByClass, enumValuesByEnum };
 }  // end _collectAllSymbols
 
 // ── Semantic tokens provider ───────────────────────────────────────────────
@@ -632,12 +710,33 @@ export class BeguileSemanticTokensProvider implements vscode.DocumentSemanticTok
         // strictly ascending (line, col) order across all push() calls.
         type PendingToken = [col: number, len: number, typeIdx: number, mod: number];
 
+        let inBlockComment = false;  // tracks multi-line /* */ block comment state
+
         for (let lineIdx = 0; lineIdx < lines.length; lineIdx++) {
             const raw = lines[lineIdx];
-            if (/^\s*\/\//.test(raw)) continue;
-            if (INCLUDE_RE.test(raw)) continue;  // include path — not code
 
-            const stripped  = stripComments(raw);
+            // ── Multi-line block comment tracking ────────────────────────
+            let codeLine = raw;
+            if (inBlockComment) {
+                const closeIdx = raw.indexOf('*/');
+                if (closeIdx === -1) continue;   // entire line is inside the block comment
+                inBlockComment = false;
+                codeLine = raw.slice(closeIdx + 2);  // only the code after */
+            }
+
+            if (/^\s*\/\//.test(codeLine)) continue;
+            if (INCLUDE_RE.test(codeLine)) continue;  // include path — not code
+
+            // stripComments removes same-line /* */ pairs and truncates at //.
+            // If an unclosed /* still remains after that, a block comment opens
+            // on this line and continues onto subsequent lines.
+            let stripped = stripComments(codeLine);
+            const blockOpen = stripped.indexOf('/*');
+            if (blockOpen !== -1) {
+                inBlockComment = true;
+                stripped = stripped.slice(0, blockOpen);
+            }
+
             const strRanges = stringRanges(stripped);
             const pending: PendingToken[] = [];
 

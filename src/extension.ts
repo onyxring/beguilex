@@ -15,7 +15,7 @@ export function activate(context: vscode.ExtensionContext) {
         vscode.languages.registerCompletionItemProvider(
             { language: 'beguile' },
             new BeguileCompletionItemProvider(),
-            '.'  // also trigger on dot for member completions
+            '.', '='  // trigger on dot and assignment
         ),
         vscode.languages.registerHoverProvider(
             { language: 'beguile' },
