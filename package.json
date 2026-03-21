@@ -39,8 +39,79 @@
           "type": "string",
           "default": "",
           "description": "Path to the Beguile library directory (beguiLib) containing _beguileCore.bgl. Can be absolute or relative to the workspace root. Leave empty to auto-detect."
+        },
+        "beguile.beguilerPath": {
+          "type": "string",
+          "default": "beguiler",
+          "description": "Path to the beguiler compiler binary. Defaults to 'beguiler' (assumed to be on PATH)."
+        },
+        "beguile.extraBeguilerArgs": {
+          "type": "string",
+          "default": "",
+          "description": "Extra command-line arguments appended to every beguiler invocation (e.g. \"-E1\" for terse error format)."
+        },
+        "beguile.interpreterTheme": {
+          "type": "string",
+          "enum": ["auto", "dark", "light"],
+          "enumDescriptions": [
+            "Follow the active VS Code color theme",
+            "Dark background",
+            "Light / parchment background"
+          ],
+          "default": "auto",
+          "description": "Color theme for the game and debug interpreter panels."
         }
       }
+    },
+    "breakpoints": [
+      { "language": "beguile" }
+    ],
+    "debuggers": [
+      {
+        "type": "beguile",
+        "label": "Beguile",
+        "languages": ["beguile"]
+      }
+    ],
+    "commands": [
+      {
+        "command": "beguile.play",
+        "title": "Beguile: Play"
+      },
+      {
+        "command": "beguile.debug",
+        "title": "Beguile: Debug"
+      },
+      {
+        "command": "beguile.openI6Source",
+        "title": "Open I6 Source at Current Line",
+        "icon": {
+          "light": "./media/i6-light.svg",
+          "dark": "./media/i6-dark.svg"
+        }
+      },
+      {
+        "command": "beguile.openBglSource",
+        "title": "Open BGL Source at Current Line",
+        "icon": {
+          "light": "./media/bgl-light.svg",
+          "dark": "./media/bgl-dark.svg"
+        }
+      }
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "beguile.openI6Source",
+          "when": "beguile.showOpenI6Button && resourceExtname == .bgl",
+          "group": "navigation"
+        },
+        {
+          "command": "beguile.openBglSource",
+          "when": "beguile.showOpenBglButton && resourceExtname == .inf",
+          "group": "navigation"
+        }
+      ]
     },
     "configurationDefaults": {
       "[beguile]": {
@@ -77,5 +148,9 @@
     "@types/vscode": "^1.75.0",
     "@types/node": "^20.0.0",
     "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "quixe": "^0.3.3",
+    "ifvms": "^1.1.6"
   }
 }
