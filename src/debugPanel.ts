@@ -24,6 +24,13 @@ import * as path   from 'path';
 import * as fs     from 'fs';
 import { resolveIsLight, themeColors } from './themeUtils';
 
+let _outputChannel: vscode.OutputChannel | null = null;
+export function setDebugPanelOutputChannel(ch: vscode.OutputChannel): void {
+    _outputChannel = ch;
+}
+function panelLog(msg: string): void {
+    _outputChannel?.appendLine(`[panel] ${msg}`);
+}
 
 export class DebugPanel {
     static readonly viewType = 'beguile.debugPanel';
@@ -114,8 +121,10 @@ export class DebugPanel {
 
         // Messages from WebView
         this.panel.webview.onDidReceiveMessage(
-            (msg: { type: string; addr?: number; vmState?: any; reqId?: number; value?: any; ok?: boolean; decoded?: string | null }) => {
-                if (msg.type === 'break' && msg.addr !== undefined) {
+            (msg: { type: string; addr?: number; vmState?: any; reqId?: number; value?: any; ok?: boolean; decoded?: string | null; msg?: string }) => {
+                if (msg.type === 'debugLog') {
+                    panelLog(msg.msg ?? '');
+                } else if (msg.type === 'break' && msg.addr !== undefined) {
                     this.onBreak(msg.addr, msg.vmState ?? { frames: [], globals: {} });
                 } else if (msg.type === 'step' && msg.addr !== undefined) {
                     this.onStep(msg.addr, msg.vmState ?? { frames: [], globals: {} });
@@ -214,6 +223,7 @@ export class DebugPanel {
         const jqueryJs   = nm('quixe', 'src', 'quixe', 'lib', 'jquery-1.12.4.min.js');
         const glkoteJs   = nm('quixe', 'src', 'quixe', 'lib', 'glkote.min.js');
         const quixeDbgJs = media('quixe-debug.js');
+        const zvmDbgJs   = media('zvm-debug.js');
         const glkoteCss  = nm('quixe', 'src', 'quixe', 'media', 'i7-glkote.css');
         const dialogCss  = nm('quixe', 'src', 'quixe', 'media', 'dialog.css');
         const zvmJs      = nm('ifvms', 'dist', 'zvm.js');
@@ -272,11 +282,17 @@ export class DebugPanel {
 <script src="${jqueryJs}"></script>
 <script src="${glkoteJs}"></script>
 <script src="${quixeDbgJs}"></script>
-${isZMachine ? `<script src="${zvmJs}"></script>` : ''}
+${isZMachine ? `<script src="${zvmJs}"></script><script src="${zvmDbgJs}"></script>` : ''}
 
 <script>
 (function () {
     var vscode = acquireVsCodeApi();
+    var _bglIsZMachine = false;
+
+    // Log helper usable from zvm-debug.js / quixe-debug.js (no vscode access there).
+    window._bglLog = function(msg) {
+        vscode.postMessage({ type: 'debugLog', msg: msg });
+    };
 
     // Breakpoint address set — the patched execute_loop checks this.
     window._bglBP = new Set();
@@ -307,11 +323,20 @@ ${isZMachine ? `<script src="${zvmJs}"></script>` : ''}
             if (msg.globalAddresses) {
                 window._bglTrackedGlobalAddrs = msg.globalAddresses;
             }
+            _bglIsZMachine = !!msg.isZMachine;
             var binary = atob(msg.storyBase64);
-            var storyArray = new Array(binary.length);
+            var storyArray = _bglIsZMachine ? new Uint8Array(binary.length) : new Array(binary.length);
             for (var i = 0; i < binary.length; i++) storyArray[i] = binary.charCodeAt(i);
-            var vm = msg.isZMachine ? ZVM : Quixe;
-            GiLoad.load_run({ vm: vm, use_query_story: false }, storyArray, 'array');
+            /* ZVM is a class constructor; GiLoad expects a singleton with prepare()/resume()
+               on it directly, so instantiate first. ZVM.prepare() also requires options.Glk
+               (GiLoad only sets options.io, not options.Glk).
+               GiDispa is the Quixe/Glulx dispatch layer; ZVM has its own Glk bindings and
+               must not have GiDispa attached (it causes retain_array errors on line input). */
+            if (_bglIsZMachine) { window.ZVM = new ZVM(); window.GiDispa = null; }
+            var vm = _bglIsZMachine ? ZVM : Quixe;
+            var glkOpt = _bglIsZMachine ? { Glk: window.Glk } : {};
+
+            GiLoad.load_run(Object.assign({ vm: vm, use_query_story: false }, glkOpt), storyArray, 'array');
 
         } else if (msg.type === 'setTheme') {
             var r = document.documentElement.style;
@@ -332,21 +357,43 @@ ${isZMachine ? `<script src="${zvmJs}"></script>` : ''}
             window._bglSkipPC = window._bglPausedPC;
             window._bglPausedPC = null;
             setRunning();
-            Quixe.resume();
+            if (_bglIsZMachine && window._bglZvmInstance) {
+                window._bglZvmInstance._bglContinue();
+            } else {
+                Quixe.resume();
+            }
 
         } else if (msg.type === 'step') {
             window._bglSkipPC = window._bglPausedPC;
             window._bglPausedPC = null;
-            window._bglSeqPts = msg.seqPts ? new Set(msg.seqPts) : null;
-            if (msg.seqPts && window._bglCurrentVmFunc && window._bglCurrentIosys !== undefined) {
-                window._bglCurrentVmFunc[window._bglCurrentIosys] = {};
+            if (_bglIsZMachine) {
+                /* Set seq-pt split addresses for the JIT block splitter (zvm-debug.js).
+                 * Also clear any already-compiled JIT blocks so they recompile with splits. */
+                if (msg.seqPts) {
+                    var newSeqPts = new Set(msg.seqPts);
+                    var changed = !window._bglAllSeqPtAddrs || window._bglAllSeqPtAddrs.size !== newSeqPts.size;
+                    window._bglAllSeqPtAddrs = newSeqPts;
+                    if (changed && window._bglZvmInstance) {
+                        window._bglZvmInstance.jit = {};
+                    }
+                }
+            } else {
+                /* seqPts / path-cache invalidation is Quixe-specific. */
+                window._bglSeqPts = msg.seqPts ? new Set(msg.seqPts) : null;
+                if (msg.seqPts && window._bglCurrentVmFunc && window._bglCurrentIosys !== undefined) {
+                    window._bglCurrentVmFunc[window._bglCurrentIosys] = {};
+                }
             }
             window._bglStepSkipAddrs = msg.skipAddrs ? new Set(msg.skipAddrs) : null;
             window._bglStepStopAt   = msg.stopAddrs && msg.stopAddrs.length
                 ? new Set(msg.stopAddrs) : null;
             window._bglStepMode = true;
             setRunning();
-            Quixe.resume();
+            if (_bglIsZMachine && window._bglZvmInstance) {
+                window._bglZvmInstance._bglContinue();
+            } else {
+                Quixe.resume();
+            }
 
         } else if (msg.type === 'readProperty') {
             var propVal = null;
@@ -365,8 +412,12 @@ ${isZMachine ? `<script src="${zvmJs}"></script>` : ''}
         } else if (msg.type === 'setGlobal') {
             var ok = false;
             if (window._bglSetGlobal) {
-                try { ok = window._bglSetGlobal(msg.address, msg.value); } catch(e) {}
-            }
+                try {
+                    var setResult = window._bglSetGlobal(msg.address, msg.value);
+                    if (setResult === true) { ok = true; }
+                    else { vscode.postMessage({ type: 'debugLog', msg: '[setGlobal] failed: ' + setResult + ' addr=' + msg.address + ' val=' + msg.value }); }
+                } catch(e) { vscode.postMessage({ type: 'debugLog', msg: '[setGlobal] exception: ' + e }); }
+            } else { vscode.postMessage({ type: 'debugLog', msg: '[setGlobal] _bglSetGlobal not defined' }); }
             vscode.postMessage({ type: 'writeResult', reqId: msg.reqId, ok: ok });
 
         } else if (msg.type === 'setLocal') {

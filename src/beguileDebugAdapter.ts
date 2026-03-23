@@ -16,11 +16,19 @@ import { DebugInfo, BglLocation } from './debugInfo';
 interface VmFrame  { funcAddr: number; returnPC: number; locals: { [frameOffset: number]: number } }
 interface VmState  { frames: VmFrame[]; globals: { [address: number]: number } }
 
-// ─── Module-level singleton ───────────────────────────────────────────────────
-// Allows the `beguile.openI6Source` command (registered once in extension.ts)
-// to reach whichever adapter instance is currently active.
+// ─── Module-level singletons ──────────────────────────────────────────────────
 
 let _activeAdapter: BeguileDebugAdapter | null = null;
+let _outputChannel: vscode.OutputChannel | null = null;
+
+/** Called from extension.ts activate() to share the Beguile output channel. */
+export function setBeguileOutputChannel(ch: vscode.OutputChannel): void {
+    _outputChannel = ch;
+}
+
+function dbgLog(msg: string): void {
+    _outputChannel?.appendLine(`[debug] ${msg}`);
+}
 
 /** Called by the `beguile.openI6Source` editor-title button. */
 export function openI6SourceCommand(): void {
@@ -29,6 +37,10 @@ export function openI6SourceCommand(): void {
 
 export function openBglSourceCommand(): void {
     _activeAdapter?.doOpenBglSource();
+}
+
+export function setActiveVarFilter(filter: string): void {
+    _activeAdapter?.setVarFilter(filter);
 }
 
 // ─── Factory ─────────────────────────────────────────────────────────────────
@@ -67,6 +79,23 @@ export class BeguileDebugAdapter implements vscode.DebugAdapter {
 
     /** Fixed variablesReference for the "Self" scope. */
     private static readonly SELF_SCOPE_REF = 3;
+    /** Fixed variablesReference for the merged filter-results scope. */
+    private static readonly FILTER_SCOPE_REF = 4;
+
+    /** Current name filter applied to all variable scopes. Empty = no filter. */
+    private varFilter = '';
+    private lastStopReason = 'breakpoint';
+
+    public setVarFilter(filter: string): void {
+        this.varFilter = filter;
+        // Re-sending 'stopped' (vs. 'invalidated') causes VS Code to re-fetch scopes
+        // and auto-expand non-expensive ones — which is what we need for the Matches scope.
+        if (this.currentVmState) {
+            this.sendEvent('stopped', { reason: this.lastStopReason, threadId: 1, allThreadsStopped: true });
+        } else {
+            this.sendEvent('invalidated', { areas: ['variables'] });
+        }
+    }
 
     /** Decoration for the I6 line that corresponds to the current VM pause point. */
     private readonly infHighlight = vscode.window.createTextEditorDecorationType({
@@ -79,10 +108,8 @@ export class BeguileDebugAdapter implements vscode.DebugAdapter {
         private readonly config: any
     ) {
         _activeAdapter = this;
-        // Update buttons whenever any document is opened or closed.
         this.context.subscriptions.push(
-            vscode.workspace.onDidOpenTextDocument(() => this.updateI6Button()),
-            vscode.workspace.onDidCloseTextDocument(() => this.updateI6Button()),
+            vscode.window.tabGroups.onDidChangeTabs(() => this.updateI6Button()),
         );
     }
 
@@ -93,6 +120,7 @@ export class BeguileDebugAdapter implements vscode.DebugAdapter {
                 this.respond(message, {
                     supportsConfigurationDoneRequest: true,
                     supportsSetVariable: true,
+                    supportsInvalidatedEvent: true,
                 });
                 // Do NOT send 'initialized' yet — wait until launch creates the panel,
                 // so that VS Code sends setBreakpoints only after the panel exists.
@@ -223,8 +251,14 @@ export class BeguileDebugAdapter implements vscode.DebugAdapter {
 
             case 'scopes': {
                 const frameId = message.arguments?.frameId ?? 0;
+                if (this.varFilter) {
+                    this.respond(message, { scopes: [
+                        { name: `Matches: "${this.varFilter}"`, variablesReference: BeguileDebugAdapter.FILTER_SCOPE_REF, expensive: false }
+                    ]});
+                    break;
+                }
                 const scopes: any[] = [
-                    { name: 'Locals',  variablesReference: 1000 + frameId, expensive: false },
+                    { name: 'Locals', variablesReference: 1000 + frameId, expensive: false },
                 ];
                 // Add a Self scope when paused inside a method (self holds a known object)
                 const selfAddr = this.debugInfo?.selfAddress();
@@ -244,8 +278,59 @@ export class BeguileDebugAdapter implements vscode.DebugAdapter {
             case 'variables': {
                 const ref  = message.arguments?.variablesReference ?? 0;
                 const vars: any[] = [];
+                const f = this.varFilter.toLowerCase();
 
-                if (ref === BeguileDebugAdapter.SELF_SCOPE_REF) {
+                if (ref === BeguileDebugAdapter.FILTER_SCOPE_REF) {
+                    // ── Merged results from all scopes (filter active) ────────
+                    // Locals from top frame
+                    const vmFrames = this.currentVmState?.frames ?? [];
+                    const vmFrame  = vmFrames.length > 0 ? vmFrames[vmFrames.length - 1] : undefined;
+                    if (vmFrame && this.debugInfo) {
+                        const routine = this.debugInfo.routineByAddr(vmFrame.funcAddr)
+                                     ?? (this.currentVmAddr !== undefined
+                                         ? this.debugInfo.routineContaining(this.currentVmAddr)
+                                         : undefined);
+                        const localsByOffset = new Map(routine?.locals.map(l => [l.frameOffset, l.name]) ?? []);
+                        const localVars = await Promise.all(
+                            Object.entries(vmFrame.locals).map(([offsetStr, value]) => {
+                                const offset = Number(offsetStr);
+                                const name   = localsByOffset.get(offset) ?? `local_${offset}`;
+                                const type   = routine ? this.debugInfo!.localVarType(routine.startAddr, name) : undefined;
+                                return this.makeVarAsync(name, value as number, type);
+                            })
+                        );
+                        vars.push(...localVars.filter(v => !f || v.name.toLowerCase().includes(f)));
+                    }
+                    // Self props
+                    const selfAddrF = this.debugInfo?.selfAddress();
+                    if (selfAddrF !== undefined && this.currentVmState && this.debugInfo && this.panel) {
+                        const selfObjAddr = this.currentVmState.globals[selfAddrF] ?? 0;
+                        const objName  = selfObjAddr ? this.debugInfo.objectByAddr(selfObjAddr) : undefined;
+                        const typeName = objName ? (this.debugInfo.globalVarType(objName) ?? objName) : undefined;
+                        const typeInfo = typeName ? this.debugInfo.typeInfo(typeName) : undefined;
+                        if (typeInfo && selfObjAddr) {
+                            const reads = await Promise.all(typeInfo.props.map(p => this.expandPropAsync(p, selfObjAddr)));
+                            for (const v of reads) {
+                                if (!f || v.name.toLowerCase().includes(f)) { vars.push(v); }
+                            }
+                        }
+                    }
+                    // Globals
+                    const globalVals = this.currentVmState?.globals ?? {};
+                    const scalarVarsF = await Promise.all(
+                        (this.debugInfo?.userGlobals() ?? []).map(g => {
+                            const raw  = globalVals[g.address] ?? 0;
+                            const type = this.debugInfo?.globalVarType(g.name);
+                            return this.makeVarAsync(g.name, raw, type);
+                        })
+                    );
+                    vars.push(...scalarVarsF.filter(v => !f || v.name.toLowerCase().includes(f)));
+                    for (const g of (this.debugInfo?.userGlobalObjects() ?? [])) {
+                        if (f && !g.name.toLowerCase().includes(f)) { continue; }
+                        vars.push(this.makeVar(g.name, g.address, this.debugInfo?.globalVarType(g.name)));
+                    }
+
+                } else if (ref === BeguileDebugAdapter.SELF_SCOPE_REF) {
                     // ── Self (current method receiver) ────────────────────────
                     const selfAddr = this.debugInfo?.selfAddress();
                     if (selfAddr !== undefined && this.currentVmState && this.debugInfo && this.panel) {
@@ -272,9 +357,10 @@ export class BeguileDebugAdapter implements vscode.DebugAdapter {
                             return this.makeVarAsync(g.name, raw, type);
                         })
                     );
-                    vars.push(...scalarVars);
+                    vars.push(...scalarVars.filter(v => !f || v.name.toLowerCase().includes(f)));
                     // Object globals: address is the fixed Glulx object address; value IS the address
                     for (const g of (this.debugInfo?.userGlobalObjects() ?? [])) {
+                        if (f && !g.name.toLowerCase().includes(f)) { continue; }
                         const type = this.debugInfo?.globalVarType(g.name);
                         vars.push(this.makeVar(g.name, g.address, type));
                     }
@@ -317,11 +403,15 @@ export class BeguileDebugAdapter implements vscode.DebugAdapter {
                                 return this.makeVarAsync(name, value as number, type);
                             })
                         );
-                        vars.push(...localVars);
+                        vars.push(...localVars.filter(v => !f || v.name.toLowerCase().includes(f)));
                     }
                 }
 
-                vars.sort((a, b) => a.name.localeCompare(b.name));
+                if (vars.length === 0 && ref === BeguileDebugAdapter.FILTER_SCOPE_REF) {
+                    vars.push({ name: 'No matches.', value: '', variablesReference: 0 });
+                } else {
+                    vars.sort((a, b) => a.name.localeCompare(b.name));
+                }
                 this.respond(message, { variables: vars });
                 break;
             }
@@ -375,16 +465,19 @@ export class BeguileDebugAdapter implements vscode.DebugAdapter {
                     if (isNaN(numVal)) { this.respond(message, {}, `Invalid value: ${strVal}`); break; }
                 }
 
+                dbgLog(`setVariable ref=${ref} name="${name}" val="${strVal}"`);
                 if (ref === 2 && this.debugInfo && this.panel) {
                     // ── Global variable ───────────────────────────────────────
                     const g = this.debugInfo.globals().find(g => g.name === name);
-                    if (!g) { this.respond(message, {}, `Unknown global: ${name}`); break; }
+                    if (!g) { dbgLog(`setVariable: unknown global "${name}"`); this.respond(message, {}, `Unknown global: ${name}`); break; }
                     const type = this.debugInfo.globalVarType(name);
+                    dbgLog(`setVariable global addr=0x${g.address.toString(16)} type=${type}`);
                     if (type !== 'int' && type !== 'bool') {
                         this.respond(message, {}, 'Only int and bool globals can be set');
                         break;
                     }
                     const ok = await this.panel.setGlobal(g.address, numVal);
+                    dbgLog(`setVariable setGlobal result=${ok}`);
                     if (!ok) { this.respond(message, {}, 'Write failed'); break; }
                     // Keep the cached state in sync so the Variables pane reflects the change immediately.
                     if (this.currentVmState) { this.currentVmState.globals[g.address] = numVal; }
@@ -467,6 +560,7 @@ export class BeguileDebugAdapter implements vscode.DebugAdapter {
                 this.clearInfHighlight();
                 this.hideI6Button();
                 this.varRefMap.clear();
+                dbgLog(`continue → addr 0x${(this.currentVmAddr ?? 0).toString(16)}`);
                 this.panel?.sendContinue();
                 this.respond(message, { allThreadsContinued: true });
                 break;
@@ -497,12 +591,12 @@ export class BeguileDebugAdapter implements vscode.DebugAdapter {
                         stopAddrs = this.debugInfo.allVmAddrs();
                     } else {
                         // Coarse: step to the next different .bgl line.
-                        // Use allVmAddrs so the pre-path check can stop at every
-                        // sequence point; onVmBreak auto-steps past unmapped ones.
+                        // Use allMappedVmAddrs so the VM stops only at addresses
+                        // that have a .bgl mapping — no auto-step churn needed.
                         skipAddrs = (this.currentBglFile && this.currentBglLine !== undefined)
                             ? this.debugInfo.bglToVmAddrs(this.currentBglFile, this.currentBglLine)
                             : [];
-                        stopAddrs = this.debugInfo.allVmAddrs();
+                        stopAddrs = this.debugInfo.allMappedVmAddrs();
                     }
                 }
 
@@ -541,6 +635,8 @@ export class BeguileDebugAdapter implements vscode.DebugAdapter {
         this.currentVmState = vmState;
         if (this.debugInfo) {
             const loc = this.debugInfo.vmAddrToBgl(vmAddr);
+            const locStr = loc ? `${nodePath.basename(loc.file)}:${loc.line}` : '(unmapped)';
+            dbgLog(`${isStep ? 'step' : 'break'} @ 0x${vmAddr.toString(16)} → ${locStr}`);
             this.currentBglFile = loc?.file;
             this.currentBglLine = loc?.line;
 
@@ -552,9 +648,9 @@ export class BeguileDebugAdapter implements vscode.DebugAdapter {
                     e => e.document.uri.fsPath === infPath
                 );
                 if (!infOpen) {
-                    // Auto-step: skip this addr, keep all sequence points as stop targets
-                    const allAddrs = this.debugInfo.allVmAddrs();
-                    this.panel?.sendStep([vmAddr], allAddrs, allAddrs);
+                    // Auto-step: skip this addr, stop only at bgl-mapped addresses
+                    const mappedAddrs = this.debugInfo.allMappedVmAddrs();
+                    this.panel?.sendStep([vmAddr], mappedAddrs, this.debugInfo.allVmAddrs());
                     return;
                 }
             }
@@ -566,8 +662,9 @@ export class BeguileDebugAdapter implements vscode.DebugAdapter {
             }
         }
         this.updateI6Button();
+        this.lastStopReason = isStep ? 'step' : 'breakpoint';
         this.sendEvent('stopped', {
-            reason: isStep ? 'step' : 'breakpoint',
+            reason: this.lastStopReason,
             threadId: 1,
             allThreadsStopped: true,
         });
@@ -591,8 +688,9 @@ export class BeguileDebugAdapter implements vscode.DebugAdapter {
         if (_activeAdapter !== this) { return; }
         if (!this.config?.bgldbgPath) { return; }
         const infPath = this.config.bgldbgPath.replace(/\.bgldbg$/, '');
-        const isDocOpen = (p: string) =>
-            vscode.workspace.textDocuments.some(d => d.uri.fsPath === p);
+        const isDocOpen = (p: string) => vscode.window.tabGroups.all.some(
+            g => g.tabs.some(t => t.input instanceof vscode.TabInputText && t.input.uri.fsPath === p)
+        );
         const infOpen = isDocOpen(infPath);
 
         // Track the inf editor column whenever it's visible (for open-beside logic).
@@ -749,7 +847,7 @@ export class BeguileDebugAdapter implements vscode.DebugAdapter {
             const words = this.panel
                 ? await Promise.all(addrs.map((addr: number) => this.panel!.decodeDictWord(addr)))
                 : [];
-            const display = `[${words.map((w: string | null) => w ? `.${w}` : '0').join(', ')}]`;
+            const display = `{${words.map((w: string | null) => w ? `.${w}` : '0').join(', ')}}`;
             return { name: p.bglName, value: display, type: 'array<dictionaryword>', variablesReference: 0 };
         }
 
@@ -762,10 +860,46 @@ export class BeguileDebugAdapter implements vscode.DebugAdapter {
         return this.makeVarAsync(p.bglName, raw, p.type);
     }
 
+    /**
+     * Resolve a generic `object`-typed variable to its specific Beguile type by
+     * scanning the live global state.  Two strategies, in order:
+     *
+     * 1. Glulx: `objectByAddr(raw)` gives the I6 name directly from the .dbg
+     *    object table (memory address → identifier).
+     * 2. Both platforms: scan all typed globals whose current runtime value
+     *    matches `raw`.  E.g. if `location == 7` and `bar`'s slot also == 7,
+     *    we infer location is a `bar` (type `room`).
+     *
+     * Returns the resolved type name, or undefined if unresolvable.
+     */
+    private resolveObjectType(raw: number): string | undefined {
+        if (!raw || !this.debugInfo) { return undefined; }
+        // Strategy 1: Glulx direct lookup
+        const objName = this.debugInfo.objectByAddr(raw);
+        if (objName) {
+            return this.debugInfo.globalVarType(objName) ?? objName;
+        }
+        // Strategy 2: scan typed globals for a value match
+        if (this.currentVmState) {
+            const globalVals = this.currentVmState.globals;
+            for (const g of this.debugInfo.userGlobals()) {
+                const gType = this.debugInfo.globalVarType(g.name);
+                if (!gType || !this.debugInfo.typeInfo(gType)) { continue; }
+                if (globalVals[g.address] === raw) { return gType; }
+            }
+        }
+        return undefined;
+    }
+
     private async makeVarAsync(name: string, raw: number, bglType: string | undefined): Promise<any> {
         let decoded: string | undefined;
         if (bglType === 'string' && this.panel && raw) {
             decoded = (await this.panel.decodeString(raw)) ?? undefined;
+        }
+        // For generic `object` type, try to resolve to a specific type at runtime
+        if (bglType === 'object') {
+            const resolved = this.resolveObjectType(raw);
+            if (resolved) { bglType = resolved; }
         }
         return this.makeVar(name, raw, bglType, decoded);
     }

@@ -209,20 +209,24 @@ ${isZMachine ? `<script src="${zvmJs}"></script>` : ''}
         var msg = event.data;
 
         if (msg.type === 'startGame') {
-            // Decode base64 → plain array of byte values (what GiLoad 'array' format expects)
+            // Decode base64 → byte array. Use Uint8Array for ZVM (requires TypedArray/ArrayBuffer);
+            // plain Array is fine for Quixe.
             var binary = atob(msg.storyBase64);
-            var storyArray = new Array(binary.length);
+            var storyArray = msg.isZMachine ? new Uint8Array(binary.length) : new Array(binary.length);
             for (var i = 0; i < binary.length; i++) {
                 storyArray[i] = binary.charCodeAt(i);
             }
 
-            var vm = msg.isZMachine ? ZVM : Quixe;
+            /* ZVM is a class constructor; GiLoad expects a singleton with prepare()/resume()
+               on it directly, so instantiate first. ZVM.prepare() also requires options.Glk
+               (GiLoad only sets options.io, not options.Glk).
+               GiDispa is the Quixe/Glulx dispatch layer; ZVM has its own Glk bindings and
+               must not have GiDispa attached (it causes retain_array errors on line input). */
+            if (msg.isZMachine) { window.ZVM = new ZVM(); window.GiDispa = null; }
+            var vm  = msg.isZMachine ? ZVM : Quixe;
+            var glkOpt = msg.isZMachine ? { Glk: window.Glk } : {};
 
-            // GiLoad.load_run(options, image, imageFormat)
-            //   options.vm  — the engine (Quixe or ZVM)
-            //   image       — array of byte values
-            //   imageFormat — 'array'
-            GiLoad.load_run({ vm: vm, use_query_story: false }, storyArray, 'array');
+            GiLoad.load_run(Object.assign({ vm: vm, use_query_story: false }, glkOpt), storyArray, 'array');
 
         } else if (msg.type === 'setTheme') {
             var r = document.documentElement.style;

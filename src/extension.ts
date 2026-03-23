@@ -1,19 +1,43 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as cp from 'child_process';
+import * as fs from 'fs';
 import { BeguileSemanticTokensProvider, tokenLegend } from './semanticTokens';
 import { BeguileCompletionItemProvider } from './completions';
 import { BeguileHoverProvider } from './hover';
 import { BeguileSignatureHelpProvider } from './signatureHelp';
 import { BeguileDefinitionProvider } from './definition';
-import { BeguileDebugAdapterFactory, openI6SourceCommand, openBglSourceCommand } from './beguileDebugAdapter';
+import { BeguileDebugAdapterFactory, openI6SourceCommand, openBglSourceCommand, setBeguileOutputChannel, setActiveVarFilter } from './beguileDebugAdapter';
+import { VariableFilterViewProvider } from './variableFilterView';
+import { setDebugPanelOutputChannel } from './debugPanel';
 
 const outputChannel = vscode.window.createOutputChannel('Beguile');
 
+/** Return the most-recently-modified file among the candidates that exist. */
+function newestExisting(candidates: string[]): string | undefined {
+    let best: string | undefined;
+    let bestMtime = -1;
+    for (const p of candidates) {
+        try {
+            const mtime = fs.statSync(p).mtimeMs;
+            if (mtime > bestMtime) { bestMtime = mtime; best = p; }
+        } catch { /* doesn't exist */ }
+    }
+    return best;
+}
+
 export function activate(context: vscode.ExtensionContext) {
+    outputChannel.appendLine('[Beguile] Extension activated (quixe-debug-v2)');
+    setBeguileOutputChannel(outputChannel);
+    setDebugPanelOutputChannel(outputChannel);
 
     context.subscriptions.push(
         vscode.debug.registerDebugAdapterDescriptorFactory('beguile', new BeguileDebugAdapterFactory(context))
+    );
+
+    const filterView = new VariableFilterViewProvider(context, (filter) => setActiveVarFilter(filter));
+    context.subscriptions.push(
+        vscode.window.registerWebviewViewProvider(VariableFilterViewProvider.viewType, filterView)
     );
 
     context.subscriptions.push(
@@ -67,8 +91,7 @@ export function activate(context: vscode.ExtensionContext) {
             path.join(bglDir, stem + '.z5'),
         ];
 
-        const { existsSync } = await import('fs');
-        const storyPath = candidates.find(p => existsSync(p));
+        const storyPath = newestExisting(candidates);
         if (!storyPath) {
             vscode.window.showErrorMessage('Could not locate compiled story file. Check beguiler output.');
             return;
@@ -125,8 +148,7 @@ export function activate(context: vscode.ExtensionContext) {
             path.join(bglDir, stem + '.ulx'),
             path.join(bglDir, stem + '.z5'),
         ];
-        const { existsSync } = await import('fs');
-        const storyPath = candidates.find(p => existsSync(p));
+        const storyPath = newestExisting(candidates);
         if (!storyPath) {
             vscode.window.showErrorMessage('Could not locate compiled story file.');
             return;
@@ -136,7 +158,7 @@ export function activate(context: vscode.ExtensionContext) {
         const infBase    = bglPath + '.transpiled.inf';
         const bgldbgPath = infBase + '.bgldbg';
         const dbgPath    = infBase + '.dbg';
-        if (!existsSync(bgldbgPath) || !existsSync(dbgPath)) {
+        if (!fs.existsSync(bgldbgPath) || !fs.existsSync(dbgPath)) {
             vscode.window.showErrorMessage('Debug files (.bgldbg / .dbg) not found — ensure beguiler compiled with --debug.');
             return;
         }

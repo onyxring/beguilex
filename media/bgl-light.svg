@@ -1,4 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
-  <rect x="0.5" y="0.5" width="15" height="15" rx="3" ry="3" fill="none" stroke="#424242" stroke-width="1"/>
-  <text x="8" y="12" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-size="9" fill="#424242">bgl</text>
+  <defs>
+    <mask id="m">
+      <rect width="16" height="16" fill="white"/>
+      <text x="7" y="12" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-style="italic" font-size="10" fill="black" stroke="black" stroke-width="4">Bgl</text>
+    </mask>
+  </defs>
+  <rect x="0.5" y="0.5" width="15" height="15" rx="3" ry="3" fill="none" stroke="#424242" stroke-width="1" mask="url(#m)"/>
+  <text x="7" y="12" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-style="italic" font-size="10" fill="#424242">Bgl</text>
 </svg>

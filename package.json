@@ -63,6 +63,16 @@
         }
       }
     },
+    "views": {
+      "debug": [
+        {
+          "type": "webview",
+          "id": "beguile.variableFilter",
+          "name": "Variable Filter",
+          "when": "debugType == beguile"
+        }
+      ]
+    },
     "breakpoints": [
       { "language": "beguile" }
     ],
