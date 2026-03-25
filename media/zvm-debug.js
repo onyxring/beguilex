@@ -87,11 +87,17 @@
     };
 
     /* ── Patched run() ──────────────────────────────────────────────── */
+    var _bglFirstRun = true;
     ZVM.prototype.run = function() {
         var log = window._bglLog || function(){};
         window._bglZvmInstance = this;
         this.stop = 0;
         var _bglIter = 0;
+        if (_bglFirstRun) {
+            _bglFirstRun = false;
+            var bpList = window._bglBP ? Array.from(window._bglBP).map(function(a){return'0x'+a.toString(16);}).join(',') : 'none';
+            log('[zvm] run() first call: pc=0x' + this.pc.toString(16) + ' _bglBP={' + bpList + '}');
+        }
         try {
         while (!this.stop) {
             var pc = this.pc;

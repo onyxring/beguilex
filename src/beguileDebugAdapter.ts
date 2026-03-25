@@ -152,12 +152,14 @@ export class BeguileDebugAdapter implements vscode.DebugAdapter {
                 const src = message.arguments?.source?.path ?? '';
                 const bps = (message.arguments?.breakpoints ?? []) as Array<{ line: number }>;
 
+                dbgLog(`setBreakpoints: src=${src} bps=${JSON.stringify(bps.map(b=>b.line))} hasDebugInfo=${!!this.debugInfo}`);
                 if (this.debugInfo && src.endsWith('.bgl')) {
                     const verified: Array<{ verified: boolean; line: number; message?: string }> = [];
                     const addrs = new Set<number>();
 
                     for (const bp of bps) {
                         const vmAddrs = this.debugInfo.bglToVmAddrs(src, bp.line);
+                        dbgLog(`  line ${bp.line} → vmAddrs=[${vmAddrs.map(a=>'0x'+a.toString(16)).join(',')}]`);
                         if (vmAddrs.length > 0) {
                             verified.push({ verified: true, line: bp.line });
                             for (const a of vmAddrs) { addrs.add(a); }
@@ -166,7 +168,8 @@ export class BeguileDebugAdapter implements vscode.DebugAdapter {
                         }
                     }
 
-                    this.panel?.updateBreakpoints(addrs);
+                    dbgLog(`  → updateBreakpoints with ${addrs.size} addrs`);
+                    this.panel?.updateBreakpoints(src, addrs);
                     this.respond(message, { breakpoints: verified });
                 } else {
                     this.respond(message, { breakpoints: bps.map(() => ({ verified: false })) });

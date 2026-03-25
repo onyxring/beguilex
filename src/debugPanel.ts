@@ -37,7 +37,9 @@ export class DebugPanel {
 
     private panel:        vscode.WebviewPanel;
     private disposables:  vscode.Disposable[] = [];
-    private pendingAddrs  = new Set<number>();
+    /** Per-source-file breakpoint addresses — merged to form the live BP set.
+     *  VS Code sends one setBreakpoints per file; we must accumulate, not replace. */
+    private pendingAddrsByFile = new Map<string, Set<number>>();
     private storyPath:    string;
     private isZMachine:   boolean;
     private lastColumn:      vscode.ViewColumn | undefined;
@@ -171,26 +173,39 @@ export class DebugPanel {
     startGame(globalAddresses: number[] = []): void {
         try {
             const buffer = fs.readFileSync(this.storyPath);
+            // Include the initial breakpoint set IN the startGame message so the
+            // webview can set _bglBP BEFORE calling GiLoad.load_run().  Without this,
+            // games that have no @read (no blocking I/O) complete their entire execution
+            // synchronously inside the 'startGame' handler — before a separate
+            // 'setBreakpoints' message could be processed — so no breakpoints would fire.
             this.panel.webview.postMessage({
                 type: 'startGame',
                 storyBase64: buffer.toString('base64'),
                 isZMachine: this.isZMachine,
                 debugMode: true,
                 globalAddresses,
+                initialBreakpoints: [...this.mergedAddrs()],
             });
-            // Send any breakpoints that arrived before game start
-            this.updateBreakpoints(this.pendingAddrs);
         } catch (e) {
             this.panel.webview.postMessage({ type: 'error', msg: String(e) });
         }
     }
 
-    /** Push the current set of VM break addresses to the WebView. */
-    updateBreakpoints(addrs: Set<number>): void {
-        this.pendingAddrs = addrs;
+    /** Merge all per-file breakpoint sets into one flat set. */
+    private mergedAddrs(): Set<number> {
+        const all = new Set<number>();
+        for (const s of this.pendingAddrsByFile.values()) { for (const a of s) { all.add(a); } }
+        return all;
+    }
+
+    /** Push the current set of VM break addresses to the WebView.
+     *  src identifies which source file these addresses belong to so that
+     *  breakpoints from other files are preserved when one file is updated. */
+    updateBreakpoints(src: string, addrs: Set<number>): void {
+        this.pendingAddrsByFile.set(src, addrs);
         this.panel.webview.postMessage({
             type: 'setBreakpoints',
-            addresses: Array.from(addrs),
+            addresses: Array.from(this.mergedAddrs()),
         });
     }
 
@@ -322,6 +337,12 @@ ${isZMachine ? `<script src="${zvmJs}"></script><script src="${zvmDbgJs}"></scri
         if (msg.type === 'startGame') {
             if (msg.globalAddresses) {
                 window._bglTrackedGlobalAddrs = msg.globalAddresses;
+            }
+            /* Set breakpoints BEFORE starting the game so that games with no
+             * blocking @read (which execute synchronously inside GiLoad.load_run)
+             * can still hit their breakpoints on the very first run. */
+            if (msg.initialBreakpoints && msg.initialBreakpoints.length > 0) {
+                window._bglBP = new Set(msg.initialBreakpoints);
             }
             _bglIsZMachine = !!msg.isZMachine;
             var binary = atob(msg.storyBase64);
