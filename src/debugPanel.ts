@@ -37,6 +37,7 @@ export class DebugPanel {
 
     private panel:        vscode.WebviewPanel;
     private disposables:  vscode.Disposable[] = [];
+    private _disposed = false;
     /** Per-source-file breakpoint addresses — merged to form the live BP set.
      *  VS Code sends one setBreakpoints per file; we must accumulate, not replace. */
     private pendingAddrsByFile = new Map<string, Set<number>>();
@@ -358,6 +359,16 @@ ${isZMachine ? `<script src="${zvmJs}"></script><script src="${zvmDbgJs}"></scri
             var glkOpt = _bglIsZMachine ? { Glk: window.Glk } : {};
 
             GiLoad.load_run(Object.assign({ vm: vm, use_query_story: false }, glkOpt), storyArray, 'array');
+            /* Prevent GlkOte arrange/timer events from re-entering execute_loop while
+             * the debugger is paused. Opening source files in VS Code can resize the
+             * webview, firing an arrange event that calls Quixe.resume() and runs the game. */
+            if (!_bglIsZMachine) {
+                var _origQuixeResume = Quixe.resume;
+                Quixe.resume = function(glk_event) {
+                    if (window._bglIsPaused) { return; }
+                    return _origQuixeResume.call(this, glk_event);
+                };
+            }
 
         } else if (msg.type === 'setTheme') {
             var r = document.documentElement.style;
@@ -377,6 +388,7 @@ ${isZMachine ? `<script src="${zvmJs}"></script><script src="${zvmDbgJs}"></scri
         } else if (msg.type === 'continue') {
             window._bglSkipPC = window._bglPausedPC;
             window._bglPausedPC = null;
+            window._bglIsPaused = false;
             setRunning();
             if (_bglIsZMachine && window._bglZvmInstance) {
                 window._bglZvmInstance._bglContinue();
@@ -409,6 +421,7 @@ ${isZMachine ? `<script src="${zvmJs}"></script><script src="${zvmDbgJs}"></scri
             window._bglStepStopAt   = msg.stopAddrs && msg.stopAddrs.length
                 ? new Set(msg.stopAddrs) : null;
             window._bglStepMode = true;
+            window._bglIsPaused = false;
             setRunning();
             if (_bglIsZMachine && window._bglZvmInstance) {
                 window._bglZvmInstance._bglContinue();
@@ -554,6 +567,8 @@ ${isZMachine ? `<script src="${zvmJs}"></script><script src="${zvmDbgJs}"></scri
     }
 
     dispose(): void {
+        if (this._disposed) { return; }
+        this._disposed = true;
         // Resolve any outstanding property-read / write / decode promises so callers don't hang.
         for (const resolve of this.pendingPropReads.values()) { resolve(null); }
         this.pendingPropReads.clear();
@@ -567,5 +582,6 @@ ${isZMachine ? `<script src="${zvmJs}"></script><script src="${zvmDbgJs}"></scri
         this.pendingDictWords.clear();
         this.disposables.forEach(d => d.dispose());
         this.disposables = [];
+        this.panel.dispose(); // close the VS Code webview panel
     }
 }

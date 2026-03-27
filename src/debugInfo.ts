@@ -65,8 +65,10 @@ export interface RoutineInfo {
 export class DebugInfo {
     /** infLine → bgl location */
     private infToBgl    = new Map<number, BglLocation>();
-    /** VM bytecode address → infLine */
-    private addrToInf   = new Map<number, number>();
+    /** VM bytecode address → { fileIndex, line } in the .dbg source table */
+    private addrToInf   = new Map<number, { fileIndex: number; line: number }>();
+    /** file-index → resolved absolute path of that .inf source file */
+    private infFileIndex = new Map<number, string>();
     /** routine start address → RoutineInfo */
     private routineMap  = new Map<number, RoutineInfo>();
     /** sorted routine start addresses (for range lookup) */
@@ -200,18 +202,59 @@ export class DebugInfo {
     private loadDbg(dbgPath: string): void {
         const xml = fs.readFileSync(dbgPath, 'utf8');
 
+        // Read i6IncludePaths from the generated .inf file's !% +include_path= ICL directive.
+        // These are the directories where the I6 compiler resolves included library files.
+        const infPath = dbgPath.replace(/\.dbg$/, '');
+        const i6SearchDirs: string[] = [path.dirname(dbgPath)];
+        try {
+            const infContent = fs.readFileSync(infPath, 'utf8');
+            for (const line of infContent.split('\n')) {
+                const m2 = /^!%\s*\+include_path=(.+)/.exec(line.trim());
+                if (m2) {
+                    for (const p of m2[1].split(',')) {
+                        const dir = p.trim();
+                        if (dir) { i6SearchDirs.push(dir); }
+                    }
+                    break;
+                }
+            }
+        } catch { /* .inf not readable — fall back to dbg dir only */ }
+
+        // ── Source file index table ─────────────────────────────────────────
+        // <given-path> entries appear in document order; their position (0-based)
+        // is the file-index referenced by sequence points.
+        const pathRe = /<given-path>([\s\S]*?)<\/given-path>/g;
+        let m: RegExpExecArray | null;
+        let fileIdx = 0;
+        while ((m = pathRe.exec(xml)) !== null) {
+            const raw = m[1].trim();
+            let resolved: string;
+            if (path.isAbsolute(raw)) {
+                resolved = raw;
+            } else if (path.extname(raw)) {
+                // Has extension — resolve against dbg directory only
+                resolved = path.join(path.dirname(dbgPath), raw);
+            } else {
+                // No extension (I6 library file like "parser") — search include dirs for <name>.h
+                const found = i6SearchDirs.map(d => path.join(d, raw + '.h')).find(p => fs.existsSync(p));
+                resolved = found ?? path.join(path.dirname(dbgPath), raw);
+            }
+            this.infFileIndex.set(fileIdx++, resolved);
+        }
+
         // ── Sequence points ──────────────────────────────────────────────────
         const spRe = /<sequence-point>([\s\S]*?)<\/sequence-point>/g;
-        let m: RegExpExecArray | null;
         while ((m = spRe.exec(xml)) !== null) {
-            const block = m[1];
-            const addrM = /<address>\s*(\d+)\s*<\/address>/.exec(block);
-            const lineM = /<line>\s*(\d+)\s*<\/line>/.exec(block);
+            const block   = m[1];
+            const addrM   = /<address>\s*(\d+)\s*<\/address>/.exec(block);
+            const lineM   = /<line>\s*(\d+)\s*<\/line>/.exec(block);
+            const fileIdxM = /<file-index>\s*(\d+)\s*<\/file-index>/.exec(block);
             if (addrM && lineM) {
-                const addr    = parseInt(addrM[1], 10);
-                const infLine = parseInt(lineM[1],  10);
+                const addr      = parseInt(addrM[1],    10);
+                const infLine   = parseInt(lineM[1],    10);
+                const fileIndex = fileIdxM ? parseInt(fileIdxM[1], 10) : 0;
                 if (!this.addrToInf.has(addr)) {
-                    this.addrToInf.set(addr, infLine);
+                    this.addrToInf.set(addr, { fileIndex, line: infLine });
                 }
             }
         }
@@ -235,8 +278,14 @@ export class DebugInfo {
                 const lb      = lm[1];
                 const lnameM  = /<identifier[^>]*>(.*?)<\/identifier>/.exec(lb);
                 const offsetM = /<frame-offset>\s*(\d+)\s*<\/frame-offset>/.exec(lb);
+                const indexM  = /<index>\s*(\d+)\s*<\/index>/.exec(lb);
                 if (lnameM && offsetM) {
+                    // Glulx: frame-offset is the byte offset directly
                     locals.push({ name: lnameM[1], frameOffset: parseInt(offsetM[1], 10) });
+                } else if (lnameM && indexM) {
+                    // Z-machine: <index> is 1-based; locals are 2-byte values
+                    // → byte offset = (index - 1) * 2
+                    locals.push({ name: lnameM[1], frameOffset: (parseInt(indexM[1], 10) - 1) * 2 });
                 }
             }
 
@@ -429,16 +478,28 @@ export class DebugInfo {
         return addr < routine.endAddr ? routine : undefined;
     }
 
-    /** Resolve a VM bytecode address to its I6 line number (1-based). */
+    /** Resolve a VM address to its I6 line number (main .inf file only, file-index 0). */
     vmAddrToInfLine(addr: number): number | undefined {
-        return this.addrToInf.get(addr);
+        const entry = this.addrToInf.get(addr);
+        return entry?.fileIndex === 0 ? entry.line : undefined;
+    }
+
+    /** Resolve a VM address to its .inf source location (any included file). */
+    vmAddrToInfLocation(addr: number): { path: string; line: number } | undefined {
+        const entry = this.addrToInf.get(addr);
+        if (!entry) { return undefined; }
+        const filePath = this.infFileIndex.get(entry.fileIndex);
+        if (!filePath) { return undefined; }
+        return { path: filePath, line: entry.line };
     }
 
     /** Resolve a VM bytecode address to its .bgl source location. */
     vmAddrToBgl(addr: number): BglLocation | undefined {
-        const infLine = this.addrToInf.get(addr);
-        if (infLine === undefined) return undefined;
-        return this.infToBgl.get(infLine);
+        const entry = this.addrToInf.get(addr);
+        if (!entry) { return undefined; }
+        // bgldbg [map] keys are I6 line numbers from the main file (file-index 0) only.
+        if (entry.fileIndex !== 0) { return undefined; }
+        return this.infToBgl.get(entry.line);
     }
 
     /**
@@ -447,8 +508,7 @@ export class DebugInfo {
      * addresses to watch for in the interpreter.
      */
     bglToVmAddrs(bglFile: string, bglLine: number): number[] {
-        // Step 1: collect all I6 lines that map to this bgl location.
-        // paths in infToBgl are pre-resolved at parse time; resolve the incoming path to match.
+        // Step 1: collect all I6 lines (file-index 0) that map to this bgl location.
         const normFile = path.resolve(bglFile);
         const infLines: number[] = [];
         for (const [infLine, loc] of this.infToBgl) {
@@ -456,14 +516,31 @@ export class DebugInfo {
                 infLines.push(infLine);
             }
         }
-        // Step 2: collect all VM addresses that map to those I6 lines.
+        // Step 2: collect all VM addresses that map to those I6 lines (main file only).
         const addrs: number[] = [];
-        for (const [addr, infLine] of this.addrToInf) {
-            if (infLines.includes(infLine)) {
+        for (const [addr, entry] of this.addrToInf) {
+            if (entry.fileIndex === 0 && infLines.includes(entry.line)) {
                 addrs.push(addr);
             }
         }
         return addrs;
+    }
+
+    /** All unique .bgl source files referenced in the debug map. */
+    allBglSourceFiles(): string[] {
+        const files = new Set<string>();
+        for (const loc of this.infToBgl.values()) { files.add(loc.file); }
+        return Array.from(files).sort();
+    }
+
+    /** All unique .inf source files referenced in the debug map (by file-index). */
+    allInfSourceFiles(): string[] {
+        const used = new Set<number>();
+        for (const entry of this.addrToInf.values()) { used.add(entry.fileIndex); }
+        return Array.from(used)
+            .map(i => this.infFileIndex.get(i))
+            .filter((p): p is string => p !== undefined)
+            .sort();
     }
 
     /** All VM addresses that have any sequence point (for I6-level stepping). */
@@ -471,22 +548,46 @@ export class DebugInfo {
         return Array.from(this.addrToInf.keys());
     }
 
+    /** All VM addresses in a specific .inf file (for I6 step-over). */
+    vmAddrsForInfFile(filePath: string): number[] {
+        let targetIdx: number | undefined;
+        for (const [idx, p] of this.infFileIndex) {
+            if (p === filePath) { targetIdx = idx; break; }
+        }
+        if (targetIdx === undefined) { return []; }
+        const result: number[] = [];
+        for (const [addr, entry] of this.addrToInf) {
+            if (entry.fileIndex === targetIdx) { result.push(addr); }
+        }
+        return result;
+    }
+
     /** All VM addresses that map to a .bgl line (for .bgl-level stepping). */
     allMappedVmAddrs(): number[] {
         const result: number[] = [];
-        for (const [addr, infLine] of this.addrToInf) {
-            if (this.infToBgl.has(infLine)) {
+        for (const [addr, entry] of this.addrToInf) {
+            if (entry.fileIndex === 0 && this.infToBgl.has(entry.line)) {
                 result.push(addr);
             }
         }
         return result;
     }
 
-    /** All VM addresses sharing the same I6 line as the given address (skip set for I6 stepping). */
-    vmAddrsForInfLine(infLine: number): number[] {
+    /** All VM addresses sharing the same .inf file+line (skip set for I6 stepping). */
+    vmAddrsForInfLine(infLine: number, infFilePath?: string): number[] {
         const result: number[] = [];
-        for (const [addr, line] of this.addrToInf) {
-            if (line === infLine) { result.push(addr); }
+        // Resolve which file-index to match
+        let targetFileIndex = 0; // default: main transpiled .inf
+        if (infFilePath) {
+            const norm = path.resolve(infFilePath);
+            for (const [idx, p] of this.infFileIndex) {
+                if (path.resolve(p) === norm) { targetFileIndex = idx; break; }
+            }
+        }
+        for (const [addr, entry] of this.addrToInf) {
+            if (entry.fileIndex === targetFileIndex && entry.line === infLine) {
+                result.push(addr);
+            }
         }
         return result;
     }

@@ -22,6 +22,48 @@
     var _origRun     = ZVM.prototype.run;
     var _origResume  = ZVM.prototype.resume;
     var _origCompile = ZVM.prototype.compile;
+    /* ── Patched start() ─────────────────────────────────────────────── */
+    /* ZVM's init() is a bootstrap that sets this.init = this.start.
+     * The real work (restart + run + Glk setup) happens in start().
+     * start() uses var Glk = this.Glk (set by prepare()).
+     * If run() fires a debug break, the Glk.glk_select + Glk.update
+     * calls afterwards pollute GlkOte's state before the game has real output.
+     * Fix: wrap Glk.glk_select and Glk.update with no-op guards. */
+    var _origStart = ZVM.prototype.start;
+    ZVM.prototype.start = function() {
+        var log  = window._bglLog || function(){};
+        var self = this;
+        var Glk  = this.Glk;
+        log('[zvm] patched start(): Glk=' + (Glk ? 'yes' : 'NO'));
+        if (Glk) {
+            /* Suppress both Glk.glk_select and Glk.update during debug break.
+             * glk_select registers a stale event listener; Glk.update would
+             * consume the GlkOte gen counter, causing _bglContinue's update
+             * to be ignored (freeze). */
+            var origSelect = Glk.glk_select;
+            var origUpdate = Glk.update;
+            Glk.glk_select = function(ref) {
+                if (self._bglDebugBreak) {
+                    log('[zvm] start: suppressing Glk.glk_select during debug break');
+                    return;
+                }
+                return origSelect.call(this, ref);
+            };
+            Glk.update = function() {
+                if (self._bglDebugBreak) {
+                    log('[zvm] start: suppressing Glk.update during debug break');
+                    return;
+                }
+                return origUpdate.apply(this, arguments);
+            };
+            try { _origStart.call(this); } finally {
+                Glk.glk_select = origSelect;
+                Glk.update     = origUpdate;
+            }
+        } else {
+            _origStart.call(this);
+        }
+    };
 
     /* ── JIT block splitter ─────────────────────────────────────────── */
     /* ZVM JIT-compiles multi-instruction "blocks". Our step check only
@@ -165,8 +207,11 @@
         var log = window._bglLog || function(){};
         log('[zvm] resume() called: _bglDebugBreak=' + this._bglDebugBreak + ' stepMode=' + !!window._bglStepMode);
         if (this._bglDebugBreak) {
-            /* resume() called again while already at a break — suppress it. */
-            this._bglDebugBreak = false;
+            /* resume() called while paused at a break — suppress it.
+             * Do NOT clear _bglDebugBreak here — leave it set so that
+             * subsequent GlkOte events (arrange, timer) are also suppressed.
+             * _bglContinue will clear it when the user actually continues. */
+            log('[zvm] resume: suppressing while _bglDebugBreak (arrange/timer event ignored)');
             return;
         }
         var self = this;
@@ -200,25 +245,39 @@
      * re-arms glk_select so the game can accept player input again. */
     ZVM.prototype._bglContinue = function() {
         var log = window._bglLog || function(){};
-        log('[zvm] _bglContinue enter pc=0x' + this.pc.toString(16) + ' stepMode=' + !!window._bglStepMode);
+        log('[zvm] _bglContinue enter pc=0x' + this.pc.toString(16) + ' stepMode=' + !!window._bglStepMode +
+            ' glk_event_before=' + (this.glk_event ? 'set' : 'null') +
+            ' glk_blocking_call_before=' + this.glk_blocking_call);
         this._bglDebugBreak = false;
         window._bglBreakPausing = false;  /* clear stale flag from the break we just resumed */
+        /* Clear any stale glk_event from the previous resume() call.
+         * If glk_event is non-null when run() reaches @aread, ZVM's glk_select
+         * treats it as a pending event and returns immediately (consuming the
+         * stale startup/arrange event) instead of blocking for real input.
+         * This causes glk_blocking_call=null after run(), so _bglContinue
+         * doesn't arm the next glk_event and GlkOte gets no input request. */
+        this.glk_event = null;
         this.run();
         log('[zvm] _bglContinue after run: debugBreak=' + this._bglDebugBreak +
             ' breakPausing=' + !!window._bglBreakPausing +
             ' quit=' + !!this.quit + ' stop=' + this.stop +
+            ' glk_blocking_call=' + this.glk_blocking_call +
             ' pc=0x' + this.pc.toString(16));
         if (this.Glk) {
             if (!this._bglDebugBreak && !this.quit) {
-                /* Normal Glk stop — restore input listener. */
-                log('[zvm] _bglContinue: Glk-blocking path (re-arming glk_select) stepMode=' + !!window._bglStepMode);
+                /* Mirror what resume() does after run(): create a fresh glk_event
+                 * RefStruct and either push glk_blocking_call into it, or call
+                 * Glk.glk_select() so GlkOte knows where to write the next event.
+                 * @aread calls glk_request_line_event (not glk_select) — glk_select
+                 * is resume()'s responsibility, and we bypassed resume(). */
                 var Glk = this.Glk;
-                /* When glk_blocking_call is null, the JIT block's @read already
-                 * called glk_select — don't call it a second time. */
-                log('[zvm] _bglContinue: glk_blocking_call=' + this.glk_blocking_call);
+                this.glk_event = new Glk.RefStruct();
                 if (this.glk_blocking_call) {
-                    this.glk_event = new Glk.RefStruct();
                     this.glk_event.push_field(this.glk_blocking_call);
+                    log('[zvm] _bglContinue: glk_event armed for blocking_call=' + this.glk_blocking_call);
+                } else {
+                    Glk.glk_select(this.glk_event);
+                    log('[zvm] _bglContinue: glk_select armed for normal @read');
                 }
             }
             /* Skip update() when stopped at a debug break/step — the same
@@ -231,11 +290,13 @@
             }
             /* Log the opcode at the blocking PC and Glk gen (if accessible). */
             if (this.m) {
-                log('[zvm] blocking opcode at 0x' + this.pc.toString(16) + ' = 0x' + this.m.getUint8(this.pc).toString(16));
+                log('[zvm] _bglContinue: blocking opcode at 0x' + this.pc.toString(16) + ' = 0x' + this.m.getUint8(this.pc).toString(16));
             }
             log('[zvm] _bglContinue: calling Glk.update()');
             try { this.Glk.update(); log('[zvm] _bglContinue: Glk.update() returned ok'); }
             catch(e) { log('[zvm] _bglContinue: Glk.update() threw: ' + e); }
+        } else {
+            log('[zvm] _bglContinue: no Glk object!');
         }
     };
 
