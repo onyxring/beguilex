@@ -22,7 +22,7 @@ const CONST_DECL_RE = /^\s*const\s+([a-zA-Z_][a-zA-Z0-9_<>]*)\s+([a-zA-Z_][a-zA-
 
 // Member declaration inside a class/object body:
 // optional modifiers, return type, member name, then '(' (method) or ';' (property)
-const MEMBER_DECL_RE = /^\s*(?:(?:extern|emitter|replace|const|array)\s+)*\b([a-zA-Z_][a-zA-Z0-9_<>]*)\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*(?:=\s*(?:\{[^}]*\}|[^;{(]*))?(\(|;)/;
+const MEMBER_DECL_RE = /^\s*(?:(?:extern|emitter|replace|const|array|readonly|static)\s+)*\b([a-zA-Z_][a-zA-Z0-9_<>]*)\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*(?:=\s*(?:\{[^}]*\}|[^;{(]*))?(\(|;)/;
 
 // Body-opener for collectMembers — broader than DECL_RE: also matches
 // 'extend class Foo' so that members added via extension are included.
@@ -53,12 +53,13 @@ const BEGUILE_KEYWORDS = new Set([
     // type declaration keywords
     'class', 'enum', 'bnum', 'verb', 'grammar', 'attribute',
     // declaration modifiers
-    'extern', 'extend', 'emitter', 'replace', 'const', 'alias',
+    'extern', 'extend', 'emitter', 'replace', 'const', 'alias', 'readonly', 'static',
     // primitive types
     'int', 'bool', 'string', 'char', 'void', 'var', 'array', 'func', 'eBool', 'dictionaryWord',
     // control flow
     'if', 'else', 'for', 'while', 'do', 'return', 'break', 'continue',
-    'switch', 'case', 'default', 'new', 'delete', 'this', 'null', 'true', 'false',
+    'switch', 'case', 'default', 'to', 'new', 'delete', 'this', 'null', 'true', 'false',
+    'operator',
     // beguile special
     'rtrue', 'rfalse',
 ]);

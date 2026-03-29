@@ -2,7 +2,7 @@
  * debugInfo.ts
  * Loads and cross-references the debug files produced during a Beguile debug build:
  *
- *   <stem>.bgl.transpiled.inf.bgldbg  — beguiler bundle (map + sym + types sections)
+ *   <stem>.bgl.bgldbg                 — beguiler bundle (map + sym + types sections)
  *   <stem>.bgl.transpiled.inf.dbg     — Inform 6 XML debug database
  *
  * The .bgldbg bundle is a plain-text section-delimited file:

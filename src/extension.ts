@@ -191,9 +191,9 @@ export function activate(context: vscode.ExtensionContext) {
             return;
         }
 
-        // Locate debug files (beguiler --debug writes these alongside the .inf)
+        // Locate debug files
         const infBase    = bglPath + '.transpiled.inf';
-        const bgldbgPath = infBase + '.bgldbg';
+        const bgldbgPath = bglPath + '.bgldbg';
         const dbgPath    = infBase + '.dbg';
         if (!fs.existsSync(bgldbgPath) || !fs.existsSync(dbgPath)) {
             vscode.window.showErrorMessage('Debug files (.bgldbg / .dbg) not found — ensure beguiler compiled with --debug.');
@@ -211,6 +211,7 @@ export function activate(context: vscode.ExtensionContext) {
                 storyPath,
                 bgldbgPath,
                 dbgPath,
+                infPath: infBase,
                 isZMachine,
             }
         );

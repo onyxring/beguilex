@@ -236,7 +236,7 @@ export class BeguileDebugAdapter implements vscode.DebugAdapter {
 
                 // Detect I6 stepping mode: main .inf or any included .inf is visible,
                 // or we're paused at an .inf-only address (no .bgl mapping).
-                const mainInfPath = this.config?.bgldbgPath?.replace(/\.bgldbg$/, '');
+                const mainInfPath = this.config?.infPath;
                 const infSources = this.debugInfo?.allInfSourceFiles() ?? [];
                 const i6Mode = (!!this.currentInfLocation && !this.currentBglFile) ||
                     vscode.window.visibleTextEditors.some(
@@ -641,7 +641,7 @@ export class BeguileDebugAdapter implements vscode.DebugAdapter {
                     // I6 mode if: (a) main .inf pane is visible, OR
                     // (b) we're paused at an .inf-only address (no .bgl mapping)
                     // — once we step into included .inf code, stay in I6 mode
-                    const mainInfPath = this.config.bgldbgPath.replace(/\.bgldbg$/, '');
+                    const mainInfPath = this.config.infPath;
                     const mainInfOpen = vscode.window.visibleTextEditors.some(
                         e => e.document.uri.fsPath === mainInfPath
                     );
@@ -723,7 +723,7 @@ export class BeguileDebugAdapter implements vscode.DebugAdapter {
             // I6 mode = main .inf or any included .inf (parser.h) is visible.
             if (isStep && !loc) {
                 const infLoc2 = this.debugInfo.vmAddrToInfLocation(vmAddr);
-                const mainInfPath = this.config.bgldbgPath.replace(/\.bgldbg$/, '');
+                const mainInfPath = this.config.infPath;
                 const visiblePaths = vscode.window.visibleTextEditors.map(e => e.document.uri.fsPath);
                 const inI6Mode = visiblePaths.some(
                     p => p === mainInfPath || (infLoc2 && p === infLoc2.path)
@@ -773,7 +773,7 @@ export class BeguileDebugAdapter implements vscode.DebugAdapter {
         if (_activeAdapter !== this) { return; }
         if (!this.config?.bgldbgPath) { return; }
         const infFilePath = this.currentInfLocation?.path
-            ?? this.config.bgldbgPath.replace(/\.bgldbg$/, '');
+            ?? this.config.infPath;
         const isDocOpen = (p: string) => vscode.window.tabGroups.all.some(
             g => g.tabs.some(t => t.input instanceof vscode.TabInputText && t.input.uri.fsPath === p)
         );
