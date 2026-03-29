@@ -13,6 +13,47 @@ import { setDebugPanelOutputChannel } from './debugPanel';
 
 const outputChannel = vscode.window.createOutputChannel('Beguile');
 
+/** Build the beguiler binary path and CLI args string from extension settings. */
+function beguilerCommand(): { bin: string; args: string } {
+    const bCfg  = vscode.workspace.getConfiguration('beguiler');
+    const i6Cfg = vscode.workspace.getConfiguration('i6');
+    const bin: string = bCfg.get('path') || 'beguiler';
+    const parts: string[] = [];
+
+    // Beguiler settings
+    const target: string = bCfg.get('target') || '';
+    if (target) {
+        const flag = target === 'Glulx' ? '-G' : `-${target.toLowerCase()}`;
+        parts.push(flag);
+    }
+
+    const errorFormat: string = bCfg.get('errorFormat') || '';
+    if (errorFormat) { parts.push(`-${errorFormat}`); }
+
+    const outputPath: string = bCfg.get('outputPath') || '';
+    if (outputPath) { parts.push(`-o "${outputPath}"`); }
+
+    const extraBeguiler: string = bCfg.get('extraArgs') || '';
+    if (extraBeguiler) { parts.push(extraBeguiler); }
+
+    // Inform 6 settings
+    const informPath: string = i6Cfg.get('inform6Path') || '';
+    if (informPath) { parts.push(`-inform=${informPath}`); }
+
+    const informSearchPath: string = i6Cfg.get('inform6SearchPath') || '';
+    if (informSearchPath) {
+        for (const p of informSearchPath.split(',')) {
+            const trimmed = p.trim();
+            if (trimmed) { parts.push(`-i6include=${trimmed}`); }
+        }
+    }
+
+    const extraInform: string = i6Cfg.get('inform6ExtraArgs') || '';
+    if (extraInform) { parts.push(extraInform); }
+
+    return { bin, args: parts.join(' ') };
+}
+
 /** Return the most-recently-modified file among the candidates that exist. */
 function newestExisting(candidates: string[]): string | undefined {
     let best: string | undefined;
@@ -55,9 +96,7 @@ export function activate(context: vscode.ExtensionContext) {
             return;
         }
         const bglPath = editor.document.uri.fsPath;
-        const config = vscode.workspace.getConfiguration('beguile');
-        const beguilerBin: string = config.get('beguilerPath') || 'beguiler';
-        const extraArgs: string   = config.get('extraBeguilerArgs') || '';
+        const { bin, args } = beguilerCommand();
 
         // Compile the file with beguiler (no --debug for plain play)
         outputChannel.clear();
@@ -65,7 +104,7 @@ export function activate(context: vscode.ExtensionContext) {
         await vscode.window.withProgress(
             { location: vscode.ProgressLocation.Notification, title: `Compiling ${path.basename(bglPath)}…`, cancellable: false },
             () => new Promise<void>((resolve, reject) => {
-                cp.exec(`"${beguilerBin}" ${extraArgs} "${bglPath}"`, (err, stdout, stderr) => {
+                cp.exec(`"${bin}" ${args} "${bglPath}"`, (err, stdout, stderr) => {
                     outputChannel.append(stdout);
                     if (stderr) outputChannel.append(stderr);
                     if (err) {
@@ -111,9 +150,7 @@ export function activate(context: vscode.ExtensionContext) {
             return;
         }
         const bglPath = editor.document.uri.fsPath;
-        const config = vscode.workspace.getConfiguration('beguile');
-        const beguilerBin: string = config.get('beguilerPath') || 'beguiler';
-        const extraArgs: string   = config.get('extraBeguilerArgs') || '';
+        const { bin, args } = beguilerCommand();
 
         // Compile with --debug
         outputChannel.clear();
@@ -122,7 +159,7 @@ export function activate(context: vscode.ExtensionContext) {
         await vscode.window.withProgress(
             { location: vscode.ProgressLocation.Notification, title: `Compiling (debug) ${path.basename(bglPath)}…`, cancellable: false },
             () => new Promise<void>((resolve, reject) => {
-                cp.exec(`"${beguilerBin}" --debug ${extraArgs} "${bglPath}"`, { cwd: path.dirname(bglPath) }, (err, stdout, stderr) => {
+                cp.exec(`"${bin}" --debug ${args} "${bglPath}"`, { cwd: path.dirname(bglPath) }, (err, stdout, stderr) => {
                     outputChannel.append(stdout);
                     if (stderr) outputChannel.append(stderr);
                     if (err) {

@@ -526,7 +526,7 @@ function findSystemInclude(name: string): string | null {
 // Locate _beguileCore.bgl using the configured libraryPath setting first,
 // then falling back to a synchronous workspace search.
 function findCoreLibrary(): string | null {
-    const config  = vscode.workspace.getConfiguration('beguile');
+    const config  = vscode.workspace.getConfiguration('beguiler');
     const libPath = config.get<string>('libraryPath');
 
     if (libPath) {

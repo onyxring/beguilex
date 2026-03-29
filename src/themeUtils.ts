@@ -10,7 +10,7 @@ export interface ThemeColors {
 }
 
 export function resolveIsLight(): boolean {
-    const s = vscode.workspace.getConfiguration('beguile').get<string>('interpreterTheme') ?? 'auto';
+    const s = vscode.workspace.getConfiguration('Beguilex').get<string>('interpreterTheme') ?? 'auto';
     return s === 'light' ||
         (s === 'auto' && vscode.window.activeColorTheme.kind === vscode.ColorThemeKind.Light);
 }

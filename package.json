@@ -1,10 +1,11 @@
 {
   "name": "beguile-language",
-  "displayName": "Beguile",
+  "displayName": "Beguilex",
   "description": "Syntax highlighting for the Beguile Interactive Fiction language",
   "version": "0.2.0",
-  "publisher": "onyxring",
+  "publisher": "OnyxRing",
   "engines": { "vscode": "^1.75.0" },
+  "icon": "images/icon.png",
   "categories": ["Programming Languages"],
   "repository": {
     "type": "git",
@@ -37,34 +38,169 @@
         }
       }
     ],
-    "configuration": {
-      "title": "Beguile",
-      "properties": {
-        "beguile.libraryPath": {
-          "type": "string",
-          "default": "",
-          "description": "Path to the Beguile library directory (beguiLib) containing _beguileCore.bgl. Can be absolute or relative to the workspace root. Leave empty to auto-detect."
-        },
-        "beguile.beguilerPath": {
-          "type": "string",
-          "default": "beguiler",
-          "description": "Path to the beguiler compiler binary. Defaults to 'beguiler' (assumed to be on PATH)."
-        },
-        "beguile.extraBeguilerArgs": {
-          "type": "string",
-          "default": "",
-          "description": "Extra command-line arguments appended to every beguiler invocation (e.g. \"-E1\" for terse error format)."
-        },
-        "beguile.interpreterTheme": {
-          "type": "string",
-          "enum": ["auto", "dark", "light"],
-          "enumDescriptions": [
-            "Follow the active VS Code color theme",
-            "Dark background",
-            "Light / parchment background"
-          ],
-          "default": "auto",
-          "description": "Color theme for the game and debug interpreter panels."
+    "configuration": [
+      {
+        "title": "Edit & Debug",
+        "id": "Beguilex",
+        "properties": {
+          "Beguilex.interpreterTheme": {
+            "type": "string",
+            "enum": ["auto", "dark", "light"],
+            "enumDescriptions": [
+              "Follow the active VS Code color theme",
+              "Dark background",
+              "Light / parchment background"
+            ],
+            "default": "auto",
+            "description": "Color theme for the interpreter panels."
+          }
+        }
+      },
+      {
+        "title": "Beguiler",
+        "id": "Beguiler",
+        "properties": {
+          "beguiler.path": {
+            "order": 1,
+            "type": "string",
+            "default": "",
+            "markdownDescription": "Path to the beguiler compiler binary. *(Should be an absolute path.)*"
+          },
+          "beguiler.libraryPath": {
+            "order": 2,
+            "type": "string",
+            "default": "beguiLib",
+            "markdownDescription": "Path to the Beguile system library. *(Can be absolute, or relative to the beguiler binary.)*"
+          },
+          "beguiler.outputPath": {
+            "order": 3,
+            "type": "string",
+            "default": "output",
+            "markdownDescription": "Output directory for compiled game files. *(Should be relative to the source file.)*"
+          },
+          "beguiler.errorFormat": {
+            "order": 5,
+            "type": "string",
+            "enum": ["E0", "E1", "E2"],
+            "enumDescriptions": [
+              "Archimedes-style",
+              "Microsoft-style",
+              "Mac MPW-style"
+            ],
+            "default": "E1",
+            "markdownDescription": "Error output format used by Beguiler. *(Also passed to I6.)*"
+          },
+          "beguiler.target": {
+            "order": 4,
+            "type": "string",
+            "enum": ["", "Glulx", "Z3", "Z5", "Z8"],
+            "enumDescriptions": [
+              "Use the target specified in the .bgl source file",
+              "Glulx (32-bit, .ulx)",
+              "Z-machine version 3 (.z3)",
+              "Z-machine version 5 (.z5)",
+              "Z-machine version 8 (.z8)"
+            ],
+            "default": "",
+            "markdownDescription": "Target platform. *(Usually set in source.)*"
+          },
+          "beguiler.extraArgs": {
+            "order": 6,
+            "type": "string",
+            "default": "",
+            "description": "Extra command-line arguments appended to every beguiler invocation."
+          }
+        }
+      },
+      {
+        "title": "Inform 6",
+        "id": "i6",
+        "properties": {
+          "i6.inform6Path": {
+            "order": 1,
+            "type": "string",
+            "default": "",
+            "markdownDescription": "Path to the Inform 6 compiler binary. *(Should be an absolute path.)*"
+          },
+          "i6.inform6SearchPath": {
+            "order": 2,
+            "type": "string",
+            "default": "",
+            "markdownDescription": "Inform 6 searches these paths to resolve #include directives, in addition to any specified in the beguile source *(Multiple paths may be comma-separated)*."
+          },
+          "i6.inform6ExtraArgs": {
+            "order": 3,
+            "type": "string",
+            "default": "",
+            "description": "Extra command-line arguments forwarded to the Inform 6 compiler."
+          }
+        }
+      }
+    ],
+    "configurationDefaults": {
+      "editor.tokenColorCustomizations": {
+        "textMateRules": [
+          {
+            "scope": [
+              "storage.type.beguile",
+              "storage.modifier.beguile",
+              "storage.type.primitive.beguile"
+            ],
+            "settings": { "foreground": "#569CD6" }
+          },
+          {
+            "scope": "keyword.control.beguile",
+            "settings": { "foreground": "#C586C0" }
+          },
+          {
+            "scope": [
+              "keyword.control.directive.beguile",
+              "keyword.control.directive.include.beguile",
+              "keyword.control.directive.define.beguile",
+              "keyword.control.directive.conditional.beguile"
+            ],
+            "settings": { "foreground": "#C586C0" }
+          },
+          {
+            "scope": "constant.language.beguile",
+            "settings": { "foreground": "#569CD6" }
+          },
+          {
+            "scope": "string.quoted.double.beguile",
+            "settings": { "foreground": "#CE9178" }
+          },
+          {
+            "scope": "constant.numeric.beguile",
+            "settings": { "foreground": "#B5CEA8" }
+          },
+          {
+            "scope": "comment.line.beguile",
+            "settings": { "foreground": "#6A9955" }
+          },
+          {
+            "scope": [
+              "constant.other.dictionary-word.beguile",
+              "constant.other.dictionary-word.plural.beguile"
+            ],
+            "settings": { "foreground": "#C3A37A" }
+          }
+        ]
+      },
+      "editor.semanticTokenColorCustomizations": {
+        "rules": {
+          "class:beguile":              "#4EC9B0",
+          "class.declaration:beguile":  "#4EC9B0",
+          "type:beguile":               "#4EC9B0",
+          "enum:beguile":               "#4EC9B0",
+          "enum.declaration:beguile":   "#4EC9B0",
+          "enumMember:beguile":         "#4FC1FF",
+          "variable:beguile":           "#9CDCFE",
+          "property:beguile":           "#9CDCFE",
+          "property.declaration:beguile": "#9CDCFE",
+          "method:beguile":             "#DCDCAA",
+          "method.declaration:beguile": "#DCDCAA",
+          "function:beguile":           "#DCDCAA",
+          "function.declaration:beguile": "#DCDCAA"
         }
       }
     },

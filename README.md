@@ -1,35 +1,32 @@
-# Beguile Language Support for VSCode
+# Beguilex — Beguile Language Extension for VS Code
 
-Syntax highlighting for `.bgl` files written in the [Beguile](https://github.com/onyxring/beguile) Interactive Fiction language — the ORBIT (OnyxRing Beguile-Inform Transpiler) source language that compiles to Inform 6 for Glulx and Z-machine targets.
 
-## Features
+![Beguile](images/beguileLogo.png)
 
-- Syntax highlighting for all Beguile language constructs:
-  - Keywords, control flow, type declarations
-  - String, character, and dictionary word literals
-  - Integer literals
-  - Preprocessor directives (`#include`, `#once`, `#define`, `#if`/`#endif`, `#i6`, `#beguilerSettings`)
-  - Raw Inform 6 blocks (`#i6 { }` and `#i6raw { }`)
-  - Emitter substitution variables (`$self`, `$prop`)
-  - Comments (`//` and `/* */`)
-- Bracket matching and auto-close for `{}`, `[]`, `()`, `<>`, `""`, `''`
-- Auto-indentation
+Editor support, integrated build, and a full debugger for [Beguile](https://github.com/onyxring/beguile) — an Interactive Fiction language that compiles via Inform 6 to the Glulx and Z-machine platforms.
 
-## Planned Features
+## Editor
 
-- Autocomplete (Language Server)
-- Diagnostics / error highlighting
-- Embedded Parchment interpreter (run games in-editor)
-- Runtime debugger (via Debug Adapter Protocol + beguiler source maps)
+- Syntax and semantic highlighting
+- Autocomplete, hover info, signature help, and go-to-definition
+- Bracket matching, auto-close, and auto-indentation
 
-## Usage
+## Build & Run
 
-Open any `.bgl` file — highlighting activates automatically.
+Compile and play .bgl games directly in VS Code using an embedded interpreter panel. Run **Beguile: Play** or **Beguile: Debug** from the Command Palette.
 
-## Development
+## Debugger
 
-To test locally:
-1. Open this folder in VSCode
-2. Press **F5** to launch the Extension Development Host
-3. Open a `.bgl` file in the new window
-4. Use **Developer: Inspect Editor Tokens and Scopes** to verify token scopes
+- Breakpoints in .bgl, .inf, and .h source files
+- Step over, step into, and step out — at both Beguile and Inform 6 levels
+- Step into included I6 library source (parser.h, verblib.h, etc.)
+- Locals, globals, and self-property inspection with type-aware object expansion
+- Watch expressions, call stack, and runtime variable editing
+
+## Requirements
+
+- [beguiler](https://github.com/onyxring/beguile) — the Beguile-to-Inform 6 transpiler
+- Inform 6 compiler (invoked automatically by beguiler)
+
+
+[def]: image
