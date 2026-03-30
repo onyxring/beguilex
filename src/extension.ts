@@ -122,7 +122,9 @@ export function activate(context: vscode.ExtensionContext) {
         const bglDir = path.dirname(bglPath);
         const stem = path.basename(bglPath, '.bgl');
         const candidates = [
+            path.join(bglDir, 'output', stem + '.gblorb'),
             path.join(bglDir, 'output', stem + '.ulx'),
+            path.join(bglDir, 'output', stem + '.zblorb'),
             path.join(bglDir, 'output', stem + '.z5'),
             path.join(bglDir, 'output', stem + '.z8'),
             path.join(bglDir, 'output', stem + '.z3'),
@@ -178,7 +180,9 @@ export function activate(context: vscode.ExtensionContext) {
         const bglDir = path.dirname(bglPath);
         const stem   = path.basename(bglPath, '.bgl');
         const candidates = [
+            path.join(bglDir, 'output', stem + '.gblorb'),
             path.join(bglDir, 'output', stem + '.ulx'),
+            path.join(bglDir, 'output', stem + '.zblorb'),
             path.join(bglDir, 'output', stem + '.z5'),
             path.join(bglDir, 'output', stem + '.z8'),
             path.join(bglDir, 'output', stem + '.z3'),
