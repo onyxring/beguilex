@@ -26,8 +26,11 @@ export function setBeguileOutputChannel(ch: vscode.OutputChannel): void {
     _outputChannel = ch;
 }
 
-function dbgLog(msg: string): void {
-    _outputChannel?.appendLine(`[debug] ${msg}`);
+// Debug logging to the Beguile output channel. Uncomment the body to enable.
+// This is the preferred method for diagnosing debugger issues — add dbgLog()
+// calls at key points, reload, reproduce, and check the Beguile output panel.
+function dbgLog(_msg: string): void {
+    // _outputChannel?.appendLine(`[debug] ${_msg}`);
 }
 
 /** Called by the `beguile.openI6Source` editor-title button. */
@@ -234,8 +237,19 @@ export class BeguileDebugAdapter implements vscode.DebugAdapter {
                     vscode.workspace.textDocuments.some(d => d.uri.fsPath === p);
                 const bglOpen = (file: string) => isDocOpen(file);
 
-                // Detect I6 stepping mode: main .inf or any included .inf is visible,
-                // or we're paused at an .inf-only address (no .bgl mapping).
+                // ── resolveSource — stack frame source priority ─────────────
+                // Determines which file VS Code navigates to for each stack frame.
+                // Priority (top frame in I6 mode):
+                //   1. infLoc — keeps focus on .inf file during I6 stepping
+                // Priority (all other cases):
+                //   1. bglLoc if file is open — prefer .bgl when user has it visible
+                //   2. infLoc if file is open — show .inf when .bgl is closed
+                //   3. bglLoc (not open) — fallback opens .bgl
+                //   4. infLoc (not open) — last resort (e.g. stepIn to new .inf file)
+                //
+                // Without the I6 mode override, VS Code would always navigate to
+                // .bgl when both .bgl and .inf are open (since .bgl is checked first).
+                // This caused the "focus reverts to .bgl pane" bug during I6 stepping.
                 const mainInfPath = this.config?.infPath;
                 const infSources = this.debugInfo?.allInfSourceFiles() ?? [];
                 const i6Mode = (!!this.currentInfLocation && !this.currentBglFile) ||
@@ -247,7 +261,6 @@ export class BeguileDebugAdapter implements vscode.DebugAdapter {
                     infLoc: { path: string; line: number } | undefined,
                     isTopFrame = false
                 ) => {
-                    // In I6 mode, top frame prefers .inf so VS Code navigates there
                     if (isTopFrame && i6Mode && infLoc) {
                         return { source: { path: infLoc.path, name: nodePath.basename(infLoc.path) }, line: infLoc.line };
                     }
@@ -522,19 +535,16 @@ export class BeguileDebugAdapter implements vscode.DebugAdapter {
                     if (isNaN(numVal)) { this.respond(message, {}, `Invalid value: ${strVal}`); break; }
                 }
 
-                dbgLog(`setVariable ref=${ref} name="${name}" val="${strVal}"`);
                 if (ref === 2 && this.debugInfo && this.panel) {
                     // ── Global variable ───────────────────────────────────────
                     const g = this.debugInfo.globals().find(g => g.name === name);
-                    if (!g) { dbgLog(`setVariable: unknown global "${name}"`); this.respond(message, {}, `Unknown global: ${name}`); break; }
+                    if (!g) { this.respond(message, {}, `Unknown global: ${name}`); break; }
                     const type = this.debugInfo.globalVarType(name);
-                    dbgLog(`setVariable global addr=0x${g.address.toString(16)} type=${type}`);
                     if (type !== 'int' && type !== 'bool') {
                         this.respond(message, {}, 'Only int and bool globals can be set');
                         break;
                     }
                     const ok = await this.panel.setGlobal(g.address, numVal);
-                    dbgLog(`setVariable setGlobal result=${ok}`);
                     if (!ok) { this.respond(message, {}, 'Write failed'); break; }
                     // Keep the cached state in sync so the Variables pane reflects the change immediately.
                     if (this.currentVmState) { this.currentVmState.globals[g.address] = numVal; }
@@ -623,6 +633,24 @@ export class BeguileDebugAdapter implements vscode.DebugAdapter {
                 break;
             }
 
+            // ── Step handler ─────────────────────────────────────────────
+            // Stepping operates in two modes determined by I6 mode detection:
+            //
+            // 1. COARSE (.bgl mode) — main .inf is NOT visible and we're at a
+            //    .bgl-mapped address.  stopAddrs = allMappedVmAddrs() so the VM
+            //    only stops at addresses with .bgl mappings.  Unmapped addresses
+            //    (library code between .bgl lines) are auto-stepped in onVmBreak.
+            //
+            // 2. FINE (I6 mode) — main .inf IS visible OR we're paused at an
+            //    .inf-only address.  Behavior depends on the DAP command:
+            //    - next:    stopAddrs = same .inf file only (skips called functions)
+            //    - stepIn:  stopAddrs = all sequence points (enters calls)
+            //    - stepOut: stopAddrs = all EXCEPT current file (stops at caller)
+            //    The "same file" filter only applies when atInfOnly (paused in
+            //    parser.h etc.), not when stepping from .bgl into .inf.
+            //
+            // skipAddrs = addresses on the CURRENT line (so we advance past them).
+            // seqPts = all sequence points (sent to JIT block splitter).
             case 'next':
             case 'stepIn':
             case 'stepOut': {
@@ -638,9 +666,6 @@ export class BeguileDebugAdapter implements vscode.DebugAdapter {
                     const infLoc = this.currentVmAddr !== undefined
                         ? this.debugInfo.vmAddrToInfLocation(this.currentVmAddr)
                         : undefined;
-                    // I6 mode if: (a) main .inf pane is visible, OR
-                    // (b) we're paused at an .inf-only address (no .bgl mapping)
-                    // — once we step into included .inf code, stay in I6 mode
                     const mainInfPath = this.config.infPath;
                     const mainInfOpen = vscode.window.visibleTextEditors.some(
                         e => e.document.uri.fsPath === mainInfPath
@@ -648,30 +673,20 @@ export class BeguileDebugAdapter implements vscode.DebugAdapter {
                     const atInfOnly = !!infLoc && !this.currentBglFile;
 
                     if (mainInfOpen || atInfOnly) {
-                        // Fine-grained I6 mode.
-                        // Skip current inf line's addrs; if no infLoc fall back to bgl addrs.
                         skipAddrs = infLoc
                             ? this.debugInfo.vmAddrsForInfLine(infLoc.line, infLoc.path)
                             : ((this.currentBglFile && this.currentBglLine !== undefined)
                                 ? this.debugInfo.bglToVmAddrs(this.currentBglFile, this.currentBglLine)
                                 : []);
                         if (message.command === 'next' && atInfOnly && infLoc) {
-                            // Step over at an .inf-only address (e.g. parser.h:5382):
-                            // stop only at addresses in the SAME .inf file, skipping
-                            // called functions like MoveFloatingObjects().
                             stopAddrs = this.debugInfo.vmAddrsForInfFile(infLoc.path);
                         } else if (message.command === 'stepOut' && atInfOnly && infLoc) {
-                            // Step out: stop at first address OUTSIDE the current .inf file
-                            // (i.e., when the current function returns to its caller).
                             const currentFileAddrs = new Set(this.debugInfo.vmAddrsForInfFile(infLoc.path));
                             stopAddrs = this.debugInfo.allVmAddrs().filter(a => !currentFileAddrs.has(a));
                         } else {
-                            // Step into, or step over/out from .bgl code:
-                            // stop at any sequence point.
                             stopAddrs = this.debugInfo.allVmAddrs();
                         }
                     } else {
-                        // Coarse .bgl mode: step to next different .bgl line only.
                         skipAddrs = (this.currentBglFile && this.currentBglLine !== undefined)
                             ? this.debugInfo.bglToVmAddrs(this.currentBglFile, this.currentBglLine)
                             : [];
@@ -708,6 +723,22 @@ export class BeguileDebugAdapter implements vscode.DebugAdapter {
         }
     }
 
+    // ── onVmBreak — auto-step cascade ─────────────────────────────
+    // Called when the VM stops at a breakpoint or step boundary.
+    //
+    // Auto-step logic (isStep && no .bgl mapping):
+    //   In .bgl mode, many VM addresses between .bgl lines have no mapping
+    //   (they're I6 library code). When the VM stops at one, we immediately
+    //   fire another step to skip past it (auto-step cascade). This continues
+    //   until we land on a .bgl-mapped address.
+    //
+    //   Auto-step is BYPASSED when:
+    //   - We're in I6 mode (main .inf or current .inf file is visible)
+    //   - The last command was stepIn or stepOut (user explicitly wants to
+    //     see the target even if its file isn't open yet)
+    //
+    // After auto-step check passes, we update currentInfLocation and send
+    // the DAP 'stopped' event so VS Code refreshes the UI.
     private onVmBreak(vmAddr: number, isStep: boolean, vmState: VmState): void {
         this.currentVmAddr  = vmAddr;
         this.currentVmState = vmState;
@@ -718,9 +749,6 @@ export class BeguileDebugAdapter implements vscode.DebugAdapter {
             this.currentBglFile = loc?.file;
             this.currentBglLine = loc?.line;
 
-            // If we stopped at an I6 sequence point that has no .bgl mapping,
-            // skip past it automatically — unless we're in I6 mode.
-            // I6 mode = main .inf or any included .inf (parser.h) is visible.
             if (isStep && !loc) {
                 const infLoc2 = this.debugInfo.vmAddrToInfLocation(vmAddr);
                 const mainInfPath = this.config.infPath;
@@ -728,11 +756,9 @@ export class BeguileDebugAdapter implements vscode.DebugAdapter {
                 const inI6Mode = visiblePaths.some(
                     p => p === mainInfPath || (infLoc2 && p === infLoc2.path)
                 );
-                // stepIn/stepOut always show the target (even if file not yet visible)
                 const showTarget = this.lastStepCommand === 'stepIn' || this.lastStepCommand === 'stepOut';
                 dbgLog(`unmapped step @ 0x${vmAddr.toString(16)} inI6=${inI6Mode} show=${showTarget}`);
                 if (!inI6Mode && !showTarget) {
-                    // Auto-step in .bgl mode: skip this addr, stop only at bgl-mapped addresses
                     dbgLog(`  auto-step to bgl`);
                     const mappedAddrs = this.debugInfo.allMappedVmAddrs();
                     this.panel?.sendStep([vmAddr], mappedAddrs, this.debugInfo.allVmAddrs());
