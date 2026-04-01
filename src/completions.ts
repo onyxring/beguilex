@@ -16,6 +16,7 @@ const KEYWORDS: readonly string[] = [
     'true', 'false',
     // Special
     'self',
+    'replaced',
 ];
 
 export class BeguileCompletionItemProvider implements vscode.CompletionItemProvider {

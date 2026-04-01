@@ -147,7 +147,7 @@
         {
           "comment": "Escape sequences. Dual scope includes string.* so VSCode bracket-pair colorizer ignores { here.",
           "name": "string.quoted.double.interpolated.beguile constant.character.escape.beguile",
-          "match": "\\\\[\"\\\\n^~@{]"
+          "match": "\\\\(?:[\"\\\\n@{]|\\$[0-9a-fA-F]+|\\d+|\\^\\^|~~|[\\^~][aeiouyAEIOUY]|'[aeiouyAEIOUY]|`[aeiouyAEIOUY]|:[aeiouyAEIOUY]|/[oO]|c[cC]|o[aA]|ss|ae|AE|OE|th|et|LL|!!|\\?\\?|<<|>>|[\\^~'`:/])"
         },
         {
           "comment": "Literal string content between interpolation spans",
@@ -170,7 +170,7 @@
       "patterns": [
         {
           "name": "constant.character.escape.beguile",
-          "match": "\\\\[\"\\\\n]"
+          "match": "\\\\(?:[\"\\\\n@]|\\$[0-9a-fA-F]+|\\d+|\\^\\^|~~|[\\^~][aeiouyAEIOUY]|'[aeiouyAEIOUY]|`[aeiouyAEIOUY]|:[aeiouyAEIOUY]|/[oO]|c[cC]|o[aA]|ss|ae|AE|OE|th|et|LL|!!|\\?\\?|<<|>>|[\\^~'`:/])"
         }
       ]
     },
@@ -247,6 +247,11 @@
           "match": "#once\\b"
         },
         {
+          "comment": "#message, #warning, #error, #exit directives",
+          "name": "keyword.control.directive.beguile",
+          "match": "#(?:message|warning|error|exit)\\b"
+        },
+        {
           "comment": "#beguilerSettings block header or property reference (#beguilerSettings.propName)",
           "name": "keyword.control.directive.beguile",
           "match": "#beguilerSettings\\b(?:\\.[a-zA-Z_][a-zA-Z0-9_]*)?"
@@ -298,7 +303,7 @@
 
     "constants-language": {
       "name": "constant.language.beguile",
-      "match": "\\b(true|false|null|selfobj|nothing|thedark)\\b"
+      "match": "\\b(true|false|null|selfobj|nothing|thedark|replaced)\\b"
     },
 
     "keyword-self": {

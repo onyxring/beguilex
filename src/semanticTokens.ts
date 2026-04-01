@@ -61,7 +61,7 @@ const BEGUILE_KEYWORDS = new Set([
     'switch', 'case', 'default', 'to', 'new', 'delete', 'this', 'null', 'true', 'false',
     'operator',
     // beguile special
-    'rtrue', 'rfalse',
+    'rtrue', 'rfalse', 'replaced',
 ]);
 
 // ── Helpers ────────────────────────────────────────────────────────────────
