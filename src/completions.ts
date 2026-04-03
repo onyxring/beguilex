@@ -8,10 +8,10 @@ const KEYWORDS: readonly string[] = [
     // Declaration keywords
     'class', 'object', 'enum', 'bnum', 'verb',
     // Modifiers
-    'extern', 'emitter', 'extend', 'replace', 'alias', 'const', 'readonly', 'static',
+    'extern', 'emitter', 'extend', 'replace', 'alias', 'const', 'readonly', 'static', 'explicit',
     // Control flow
     'if', 'else', 'for', 'in', 'while', 'do', 'switch', 'case', 'default',
-    'return', 'break', 'continue', 'to',
+    'return', 'break', 'continue', 'to', 'try', 'catch', 'throw',
     // Literals
     'true', 'false',
     // Special

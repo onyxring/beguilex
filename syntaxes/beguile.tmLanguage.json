@@ -283,12 +283,12 @@
 
     "keywords-control": {
       "name": "keyword.control.beguile",
-      "match": "\\b(if|else|for|while|do|switch|case|default|break|continue|return|rtrue|rfalse|in|to)\\b"
+      "match": "\\b(if|else|for|while|do|switch|case|default|break|continue|return|rtrue|rfalse|in|to|try|catch|throw)\\b"
     },
 
     "keywords-declaration": {
       "name": "storage.modifier.beguile",
-      "match": "\\b(extern|extend|emitter|replace|const|alias|readonly|static)\\b"
+      "match": "\\b(extern|extend|emitter|replace|const|alias|readonly|static|explicit)\\b"
     },
 
     "keywords-type-declaration": {
@@ -323,7 +323,7 @@
       "patterns": [
         {
           "comment": "operator keyword in operator declarations (operator ?, operator switch, etc.)",
-          "match": "\\b(operator)\\s+([?]|switch|==|!=|<|>|<=|>=|\\+|-|\\*|/|%)",
+          "match": "\\b(operator)\\s+([?]|switch|==|!=|=~|<|>|<=|>=|\\+|-|\\*|/|%)",
           "captures": {
             "1": { "name": "storage.modifier.beguile" },
             "2": { "name": "entity.name.function.beguile" }
@@ -331,7 +331,7 @@
         },
         {
           "name": "keyword.operator.beguile",
-          "match": "\\?\\.|\\.\\.|==|!=|<=|>=|=>|&&|\\|\\||\\+\\+|--|\\+=|-=|\\*=|/=|%=|\\|=|&=|\\^=|<<|>>|\\?\\?"
+          "match": "\\?\\.|\\.\\.|==|!=|=~|<=|>=|=>|&&|\\|\\||\\+\\+|--|\\+=|-=|\\*=|/=|%=|\\|=|&=|\\^=|<<|>>|\\?\\?"
         },
         {
           "name": "keyword.operator.beguile",

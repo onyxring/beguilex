@@ -33,20 +33,20 @@ function beguilerCommand(): { bin: string; args: string } {
     const outputPath: string = bCfg.get('outputPath') || '';
     if (outputPath) { parts.push(`-o "${outputPath}"`); }
 
+    const includePaths: string = bCfg.get('includePaths') || '';
+    if (includePaths) {
+        for (const p of includePaths.split(',')) {
+            const trimmed = p.trim();
+            if (trimmed) { parts.push(`-includepaths=${trimmed}`); }
+        }
+    }
+
     const extraBeguiler: string = bCfg.get('extraArgs') || '';
     if (extraBeguiler) { parts.push(extraBeguiler); }
 
     // Inform 6 settings
     const informPath: string = i6Cfg.get('inform6Path') || '';
     if (informPath) { parts.push(`-inform=${informPath}`); }
-
-    const informSearchPath: string = i6Cfg.get('inform6SearchPath') || '';
-    if (informSearchPath) {
-        for (const p of informSearchPath.split(',')) {
-            const trimmed = p.trim();
-            if (trimmed) { parts.push(`-i6include=${trimmed}`); }
-        }
-    }
 
     const extraInform: string = i6Cfg.get('inform6ExtraArgs') || '';
     if (extraInform) { parts.push(extraInform); }

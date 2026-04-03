@@ -104,8 +104,14 @@
             "default": "",
             "markdownDescription": "Target platform. *(Usually set in source.)*"
           },
-          "beguiler.extraArgs": {
+          "beguiler.includePaths": {
             "order": 6,
+            "type": "string",
+            "default": "",
+            "markdownDescription": "Additional search paths for #include directives, used by both Beguile and Inform 6. *(Multiple paths may be comma-separated. Usually set in source.)*"
+          },
+          "beguiler.extraArgs": {
+            "order": 7,
             "type": "string",
             "default": "",
             "description": "Extra command-line arguments appended to every beguiler invocation."
@@ -122,14 +128,8 @@
             "default": "",
             "markdownDescription": "Path to the Inform 6 compiler binary. *(Should be an absolute path.)*"
           },
-          "i6.inform6SearchPath": {
-            "order": 2,
-            "type": "string",
-            "default": "",
-            "markdownDescription": "Inform 6 searches these paths to resolve #include directives, in addition to any specified in the beguile source *(Multiple paths may be comma-separated)*."
-          },
           "i6.inform6ExtraArgs": {
-            "order": 3,
+            "order": 2,
             "type": "string",
             "default": "",
             "description": "Extra command-line arguments forwarded to the Inform 6 compiler."
