@@ -283,17 +283,17 @@
 
     "keywords-control": {
       "name": "keyword.control.beguile",
-      "match": "\\b(if|else|for|while|do|switch|case|default|break|continue|return|rtrue|rfalse|in|to|try|catch|throw)\\b"
+      "match": "\\b(if|else|for|while|do|switch|case|break|continue|return|rtrue|rfalse|in|to|try|catch|throw)\\b"
     },
 
     "keywords-declaration": {
       "name": "storage.modifier.beguile",
-      "match": "\\b(extern|extend|emitter|replace|const|alias|readonly|static|explicit)\\b"
+      "match": "\\b(extern|extend|emitter|replace|const|alias|readonly|static|explicit|default)\\b"
     },
 
     "keywords-type-declaration": {
       "name": "storage.type.beguile",
-      "match": "\\b(class|object|enum|bnum|verb|grammar|attribute)\\b"
+      "match": "\\b(class|object|enum|bnum|verb|grammar|attribute|grammarElement|grammarPattern|grammarRule|grammarRuleList)\\b"
     },
 
     "keywords-type-primitive": {

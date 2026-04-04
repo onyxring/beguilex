@@ -11,7 +11,7 @@ const tokenModifiers = ['declaration'];
 export const tokenLegend = new vscode.SemanticTokensLegend(tokenTypes, tokenModifiers);
 
 // Type declaration: (optional modifiers) (keyword) (name)
-const DECL_RE = /^\s*(?:extern\s+|emitter\s+|alias\s+)*\b(class|object|enum|bnum)\s+([a-zA-Z_][a-zA-Z0-9_]*)/;
+const DECL_RE = /^\s*(?:extern\s+|emitter\s+|alias\s+|default\s+)*\b(class|object|enum|bnum)\s+([a-zA-Z_][a-zA-Z0-9_]*)/;
 
 // Single-line extern declaration: extern [const] <typeKeyword> <name> [as <alias>];
 // Handles verb, grammarToken, attribute, int, var, and extern class instances.
@@ -22,7 +22,7 @@ const CONST_DECL_RE = /^\s*const\s+([a-zA-Z_][a-zA-Z0-9_<>]*)\s+([a-zA-Z_][a-zA-
 
 // Member declaration inside a class/object body:
 // optional modifiers, return type, member name, then '(' (method) or ';' (property)
-const MEMBER_DECL_RE = /^\s*(?:(?:extern|emitter|replace|const|array|readonly|static|explicit)\s+)*\b([a-zA-Z_][a-zA-Z0-9_<>]*)\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*(?:=\s*(?:\{[^}]*\}|[^;{(]*))?(\(|;)/;
+const MEMBER_DECL_RE = /^\s*(?:(?:extern|emitter|replace|const|array|readonly|static|explicit|default)\s+)*\b([a-zA-Z_][a-zA-Z0-9_<>]*)\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*(?:=\s*(?:\{[^}]*\}|[^;{(]*))?(\(|;)/;
 
 // Body-opener for collectMembers — broader than DECL_RE: also matches
 // 'extend class Foo' so that members added via extension are included.
@@ -32,7 +32,10 @@ const MEMBER_DECL_RE = /^\s*(?:(?:extern|emitter|replace|const|array|readonly|st
 // `emitter object parent()`. A negative lookahead was tried first but caused
 // backtracking: the engine would shrink the name capture (e.g. `operato`)
 // until the lookahead passed at a mid-identifier position.
-const BODY_OPENER_RE = /^\s*(?:extern\s+|emitter\s+|alias\s+|extend\s+)*\b(class|object)\s+([a-zA-Z_][a-zA-Z0-9_]*)(?=\s*[{:])/;
+const BODY_OPENER_RE = /^\s*(?:extern\s+|emitter\s+|alias\s+|extend\s+|default\s+)*\b(class|object|verb|grammar)\s+([a-zA-Z_][a-zA-Z0-9_]*)(?=\s*[{:])/;
+
+// Extend on a named object: `extend ObjectName {` (no type keyword needed)
+const EXTEND_OBJECT_RE = /^\s*extend\s+([a-zA-Z_][a-zA-Z0-9_]*)(?=\s*\{)/;
 
 // User-defined type instance body opener: `TypeName instanceName {`
 // Used as a fallback when BODY_OPENER_RE doesn't match but the first identifier
@@ -52,8 +55,9 @@ const INCLUDE_RE = /^\s*#?include\s*(?:<([^>]+)>|"([^"]+)")/;
 const BEGUILE_KEYWORDS = new Set([
     // type declaration keywords
     'class', 'enum', 'bnum', 'verb', 'grammar', 'attribute',
+    'grammarElement', 'grammarPattern', 'grammarRule', 'grammarRuleList',
     // declaration modifiers
-    'extern', 'extend', 'emitter', 'replace', 'const', 'alias', 'readonly', 'static', 'explicit',
+    'extern', 'extend', 'emitter', 'replace', 'const', 'alias', 'readonly', 'static', 'explicit', 'default',
     // primitive types
     'int', 'bool', 'string', 'char', 'void', 'var', 'array', 'func', 'eBool', 'dictionaryWord',
     // control flow
@@ -323,10 +327,15 @@ function collectMembers(lines: string[], seen: Set<string>, filePath: string, ty
         const bm = BODY_OPENER_RE.exec(stripped);
         if (bm) {
             bodyOpenerKw = bm[1]; bodyOpenerName = bm[2];
-        } else if (typeNames) {
-            const tm = TYPED_INSTANCE_RE.exec(stripped);
-            if (tm && typeNames.has(tm[1]) && !BEGUILE_KEYWORDS.has(tm[1])) {
-                bodyOpenerKw = 'object'; bodyOpenerName = tm[2];
+        } else {
+            const xm = EXTEND_OBJECT_RE.exec(stripped);
+            if (xm) {
+                bodyOpenerKw = 'object'; bodyOpenerName = xm[1];
+            } else if (typeNames) {
+                const tm = TYPED_INSTANCE_RE.exec(stripped);
+                if (tm && typeNames.has(tm[1]) && !BEGUILE_KEYWORDS.has(tm[1])) {
+                    bodyOpenerKw = 'object'; bodyOpenerName = tm[2];
+                }
             }
         }
 
@@ -402,6 +411,8 @@ function findMemberDeclPositions(lines: string[], typeNames?: Set<string>): Decl
         const bm = BODY_OPENER_RE.exec(stripped);
         if (bm) {
             bodyOpenerKw = bm[1];
+        } else if (EXTEND_OBJECT_RE.test(stripped)) {
+            bodyOpenerKw = 'object';
         } else if (typeNames) {
             const tm = TYPED_INSTANCE_RE.exec(stripped);
             if (tm && typeNames.has(tm[1]) && !BEGUILE_KEYWORDS.has(tm[1])) {
@@ -460,7 +471,7 @@ function collectFunctions(lines: string[], seen: Set<string>, filePath: string):
         if (i6Open && i6Depth === -1) i6Depth = depth;
 
         const delta = netBraceChange(stripped);
-        const declMatch = BODY_OPENER_RE.exec(stripped);
+        const declMatch = BODY_OPENER_RE.exec(stripped) || EXTEND_OBJECT_RE.exec(stripped);
 
         // Top-level functions: depth 0, not inside i6, not a type declaration line
         if (depth === 0 && i6Depth === -1 && !declMatch) {

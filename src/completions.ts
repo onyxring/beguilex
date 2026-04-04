@@ -7,10 +7,11 @@ const KEYWORDS: readonly string[] = [
     'int', 'bool', 'char', 'string', 'var', 'void', 'array', 'func',
     // Declaration keywords
     'class', 'object', 'enum', 'bnum', 'verb',
+    'grammarElement', 'grammarPattern', 'grammarRule', 'grammarRuleList',
     // Modifiers
-    'extern', 'emitter', 'extend', 'replace', 'alias', 'const', 'readonly', 'static', 'explicit',
+    'extern', 'emitter', 'extend', 'replace', 'alias', 'const', 'readonly', 'static', 'explicit', 'default',
     // Control flow
-    'if', 'else', 'for', 'in', 'while', 'do', 'switch', 'case', 'default',
+    'if', 'else', 'for', 'in', 'while', 'do', 'switch', 'case',
     'return', 'break', 'continue', 'to', 'try', 'catch', 'throw',
     // Literals
     'true', 'false',
