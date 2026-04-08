@@ -21,8 +21,8 @@ const EXTERN_SINGLE_RE = /^\s*extern\s+(const\s+)?([a-zA-Z_][a-zA-Z0-9_]*)\s+([a
 const CONST_DECL_RE = /^\s*const\s+([a-zA-Z_][a-zA-Z0-9_<>]*)\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*(?:=|;)/;
 
 // Member declaration inside a class/object body:
-// optional modifiers, return type, member name, then '(' (method) or ';' (property)
-const MEMBER_DECL_RE = /^\s*(?:(?:extern|emitter|replace|const|array|readonly|static|explicit|default)\s+)*\b([a-zA-Z_][a-zA-Z0-9_<>]*)\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*(?:=\s*(?:\{[^}]*\}|[^;{(]*))?(\(|;)/;
+// optional modifiers, return type, member name, then '(' (method), ';' (property), or '{' (emitter value)
+const MEMBER_DECL_RE = /^\s*(?:(?:extern|emitter|replace|const|array|readonly|static|explicit|default)\s+)*\b([a-zA-Z_][a-zA-Z0-9_<>]*)\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*(?:=\s*(?:\{[^}]*\}|[^;{(]*))?(\(|;|\{)/;
 
 // Body-opener for collectMembers — broader than DECL_RE: also matches
 // 'extend class Foo' so that members added via extension are included.
@@ -508,6 +508,21 @@ function collectFunctions(lines: string[], seen: Set<string>, filePath: string):
 // the same include name across multiple document versions or provider calls.
 const resolvedPathCache = new Map<string, string | null>();
 
+// Recursively search a directory for a file by name. Returns the full path or null.
+function findFileRecursive(dir: string, filename: string): string | null {
+    try {
+        const candidate = path.join(dir, filename);
+        if (fs.existsSync(candidate)) return candidate;
+        for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+            if (entry.isDirectory()) {
+                const found = findFileRecursive(path.join(dir, entry.name), filename);
+                if (found) return found;
+            }
+        }
+    } catch { /* permission error or missing dir */ }
+    return null;
+}
+
 // Walk every workspace folder and return the first existing path that matches
 // one of the candidate sub-paths (checked synchronously).
 function findInWorkspaceFolders(...subPaths: string[]): string | null {
@@ -526,12 +541,23 @@ function findSystemInclude(name: string): string | null {
 
     const withExt = name.endsWith('.bgl') ? name : `${name}.bgl`;
 
-    const result = findInWorkspaceFolders(
-        path.join('beguile', 'beguiLib', withExt),
-        path.join('inform6', 'beguilib', withExt),
-        path.join('beguiLib', withExt),
-        withExt
-    );
+    // Search known library directories recursively for the include file
+    const libDirs = ['beguile/beguilib', 'beguile/beguiLib', 'inform6/beguilib', 'beguiLib'];
+    let result: string | null = null;
+    for (const folder of vscode.workspace.workspaceFolders ?? []) {
+        for (const libDir of libDirs) {
+            const dir = path.join(folder.uri.fsPath, libDir);
+            if (fs.existsSync(dir)) {
+                const found = findFileRecursive(dir, withExt);
+                if (found) { result = found; break; }
+            }
+        }
+        if (result) break;
+    }
+    if (!result) {
+        // Fallback: check workspace root
+        result = findInWorkspaceFolders(withExt);
+    }
     resolvedPathCache.set(name, result);
     return result;
 }
@@ -545,8 +571,8 @@ function findCoreLibrary(): string | null {
     if (libPath) {
         const base      = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? '';
         const resolved  = path.isAbsolute(libPath) ? libPath : path.join(base, libPath);
-        const candidate = path.join(resolved, '_beguileCore.bgl');
-        if (fs.existsSync(candidate)) return candidate;
+        const found     = findFileRecursive(resolved, '_beguileCore.bgl');
+        if (found) return found;
     }
 
     return findSystemInclude('_beguileCore');
@@ -724,6 +750,16 @@ export class BeguileSemanticTokensProvider implements vscode.DocumentSemanticTok
         type PendingToken = [col: number, len: number, typeIdx: number, mod: number];
 
         let inBlockComment = false;  // tracks multi-line /* */ block comment state
+        let bsDepth = -1;  // depth inside #beguilerSettings { } block (-1 = outside)
+
+        // Build a set of beguilerSettings property names for bare-name highlighting
+        const { membersByClass } = await collectAllSymbols(document);
+        const bsMembers = new Set(
+            (membersByClass.get('beguilerSettingsType') ?? []).map(m => m.name)
+        );
+        const bsMemberPattern = bsMembers.size > 0
+            ? new RegExp(`\\b(${[...bsMembers].map(n => reEsc(n)).join('|')})\\b`, 'g')
+            : null;
 
         for (let lineIdx = 0; lineIdx < lines.length; lineIdx++) {
             const raw = lines[lineIdx];
@@ -750,6 +786,15 @@ export class BeguileSemanticTokensProvider implements vscode.DocumentSemanticTok
                 stripped = stripped.slice(0, blockOpen);
             }
 
+            // Track #beguilerSettings { } block depth
+            if (/#beguilerSettings\s*\{/.test(stripped)) { bsDepth = 0; }
+            if (bsDepth >= 0) {
+                for (const ch of stripped) {
+                    if (ch === '{') bsDepth++;
+                    else if (ch === '}') { bsDepth--; if (bsDepth <= 0) { bsDepth = -1; break; } }
+                }
+            }
+
             const strRanges = stringRanges(stripped);
             const pending: PendingToken[] = [];
 
@@ -757,6 +802,17 @@ export class BeguileSemanticTokensProvider implements vscode.DocumentSemanticTok
                 const idx = tokenTypes.indexOf(typeName);
                 if (idx >= 0) pending.push([col, len, idx, mod]);
             };
+
+            // beguilerSettings property names (bare names, no dot prefix)
+            if (bsDepth > 0 && bsMemberPattern) {
+                bsMemberPattern.lastIndex = 0;
+                let m: RegExpExecArray | null;
+                while ((m = bsMemberPattern.exec(stripped)) !== null) {
+                    const col = m.index;
+                    if (inRange(col, strRanges)) continue;
+                    emit(col, m[1].length, 'property', 0);
+                }
+            }
 
             // Type name tokens
             if (typePattern) {

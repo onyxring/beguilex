@@ -47,6 +47,7 @@ export class DebugPanel {
     private onBreak:         (addr: number, vmState: any) => void;
     private onStep:          (addr: number, vmState: any) => void;
     private onClose:         (column: vscode.ViewColumn | undefined) => void;
+    onDebugOutput?:          (text: string) => void;
     private pendingPropReads = new Map<number, (value: number | number[] | null) => void>();
     private pendingWrites    = new Map<number, (ok: boolean) => void>();
     private pendingDecodes   = new Map<number, (value: string | null) => void>();
@@ -127,6 +128,8 @@ export class DebugPanel {
             (msg: { type: string; addr?: number; vmState?: any; reqId?: number; value?: any; ok?: boolean; decoded?: string | null; msg?: string }) => {
                 if (msg.type === 'debugLog') {
                     panelLog(msg.msg ?? '');
+                } else if (msg.type === 'debugOutput') {
+                    if (this.onDebugOutput) { this.onDebugOutput(msg.msg ?? (msg as any).text ?? ''); }
                 } else if (msg.type === 'break' && msg.addr !== undefined) {
                     this.onBreak(msg.addr, msg.vmState ?? { frames: [], globals: {} });
                 } else if (msg.type === 'step' && msg.addr !== undefined) {
@@ -331,6 +334,12 @@ ${isZMachine ? `<script src="${zvmJs}"></script><script src="${zvmDbgJs}"></scri
         // no-op — status bar removed; breakpoint count tracked internally only
     }
 
+    // Debug output capture — mirrors game text to the extension host
+    // so it appears in the Debug Console immediately.
+    window._bglDebugOutput = function(text) {
+        vscode.postMessage({ type: 'debugOutput', text: text });
+    };
+
     // Messages from extension host
     window.addEventListener('message', function (event) {
         var msg = event.data;
@@ -368,6 +377,14 @@ ${isZMachine ? `<script src="${zvmJs}"></script><script src="${zvmDbgJs}"></scri
                     if (window._bglIsPaused) { return; }
                     return _origQuixeResume.call(this, glk_event);
                 };
+                /* Wrap Glk.glk_put_jstring to mirror game text to Debug Console */
+                if (window.Glk && window.Glk.glk_put_jstring) {
+                    var _origPutJstring = window.Glk.glk_put_jstring;
+                    window.Glk.glk_put_jstring = function(text, allbytes) {
+                        _origPutJstring.call(this, text, allbytes);
+                        if (window._bglDebugOutput) { window._bglDebugOutput(text); }
+                    };
+                }
             }
 
         } else if (msg.type === 'setTheme') {
@@ -381,6 +398,10 @@ ${isZMachine ? `<script src="${zvmJs}"></script><script src="${zvmDbgJs}"></scri
 
         } else if (msg.type === 'setBreakpoints') {
             window._bglBP = new Set(msg.addresses);
+            /* Invalidate JIT cache so blocks recompile with splits at BP addresses */
+            if (_bglIsZMachine && window._bglZvmInstance) {
+                window._bglZvmInstance.jit = {};
+            }
             if (!window._bglPausedPC) {
                 setRunning();
             }
@@ -401,14 +422,14 @@ ${isZMachine ? `<script src="${zvmJs}"></script><script src="${zvmDbgJs}"></scri
             window._bglPausedPC = null;
             if (_bglIsZMachine) {
                 /* Set seq-pt split addresses for the JIT block splitter (zvm-debug.js).
-                 * Also clear any already-compiled JIT blocks so they recompile with splits. */
+                 * Always clear the JIT cache so blocks recompile with proper splits.
+                 * Previously only cleared when seqPts changed, but blocks compiled
+                 * during start() or earlier steps may lack needed split points. */
                 if (msg.seqPts) {
-                    var newSeqPts = new Set(msg.seqPts);
-                    var changed = !window._bglAllSeqPtAddrs || window._bglAllSeqPtAddrs.size !== newSeqPts.size;
-                    window._bglAllSeqPtAddrs = newSeqPts;
-                    if (changed && window._bglZvmInstance) {
-                        window._bglZvmInstance.jit = {};
-                    }
+                    window._bglAllSeqPtAddrs = new Set(msg.seqPts);
+                }
+                if (window._bglZvmInstance) {
+                    window._bglZvmInstance.jit = {};
                 }
             } else {
                 /* seqPts / path-cache invalidation is Quixe-specific. */

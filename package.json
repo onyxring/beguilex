@@ -4,9 +4,13 @@
   "description": "Syntax highlighting for the Beguile Interactive Fiction language",
   "version": "0.2.0",
   "publisher": "OnyxRing",
-  "engines": { "vscode": "^1.75.0" },
+  "engines": {
+    "vscode": "^1.75.0"
+  },
   "icon": "images/icon.png",
-  "categories": ["Programming Languages"],
+  "categories": [
+    "Programming Languages"
+  ],
   "repository": {
     "type": "git",
     "url": "https://github.com/onyxring/beguilex"
@@ -17,14 +21,23 @@
     "languages": [
       {
         "id": "beguile",
-        "aliases": ["Beguile", "bgl"],
-        "extensions": [".bgl"],
+        "aliases": [
+          "Beguile",
+          "bgl"
+        ],
+        "extensions": [
+          ".bgl"
+        ],
         "configuration": "./language-configuration.json"
       },
       {
         "id": "inform6",
-        "aliases": ["Inform 6"],
-        "extensions": [".inf"]
+        "aliases": [
+          "Inform 6"
+        ],
+        "extensions": [
+          ".inf"
+        ]
       }
     ],
     "grammars": [
@@ -43,9 +56,18 @@
         "title": "Edit & Debug",
         "id": "Beguilex",
         "properties": {
+          "Beguilex.debugConsoleOutput": {
+            "type": "boolean",
+            "default": false,
+            "description": "Mirror game text output to the Debug Console in real-time during debugging."
+          },
           "Beguilex.interpreterTheme": {
             "type": "string",
-            "enum": ["auto", "dark", "light"],
+            "enum": [
+              "auto",
+              "dark",
+              "light"
+            ],
             "enumDescriptions": [
               "Follow the active VS Code color theme",
               "Dark background",
@@ -81,7 +103,11 @@
           "beguiler.errorFormat": {
             "order": 5,
             "type": "string",
-            "enum": ["E0", "E1", "E2"],
+            "enum": [
+              "E0",
+              "E1",
+              "E2"
+            ],
             "enumDescriptions": [
               "Archimedes-style",
               "Microsoft-style",
@@ -93,7 +119,13 @@
           "beguiler.target": {
             "order": 4,
             "type": "string",
-            "enum": ["", "Glulx", "Z3", "Z5", "Z8"],
+            "enum": [
+              "",
+              "Glulx",
+              "Z3",
+              "Z5",
+              "Z8"
+            ],
             "enumDescriptions": [
               "Use the target specified in the .bgl source file",
               "Glulx (32-bit, .ulx)",
@@ -148,15 +180,23 @@
       ]
     },
     "breakpoints": [
-      { "language": "beguile" },
-      { "language": "inform6" },
-      { "language": "c" }
+      {
+        "language": "beguile"
+      },
+      {
+        "language": "inform6"
+      },
+      {
+        "language": "c"
+      }
     ],
     "debuggers": [
       {
         "type": "beguile",
         "label": "Beguile",
-        "languages": ["beguile"]
+        "languages": [
+          "beguile"
+        ]
       }
     ],
     "commands": [
@@ -211,11 +251,15 @@
               "storage.modifier.beguile",
               "storage.type.primitive.beguile"
             ],
-            "settings": { "foreground": "#569CD6" }
+            "settings": {
+              "foreground": "#569CD6"
+            }
           },
           {
             "scope": "keyword.control.beguile",
-            "settings": { "foreground": "#C586C0" }
+            "settings": {
+              "foreground": "#C586C0"
+            }
           },
           {
             "scope": [
@@ -224,47 +268,59 @@
               "keyword.control.directive.define.beguile",
               "keyword.control.directive.conditional.beguile"
             ],
-            "settings": { "foreground": "#C586C0" }
+            "settings": {
+              "foreground": "#C586C0"
+            }
           },
           {
             "scope": "constant.language.beguile",
-            "settings": { "foreground": "#569CD6" }
+            "settings": {
+              "foreground": "#569CD6"
+            }
           },
           {
             "scope": "string.quoted.double.beguile",
-            "settings": { "foreground": "#CE9178" }
+            "settings": {
+              "foreground": "#CE9178"
+            }
           },
           {
             "scope": "constant.numeric.beguile",
-            "settings": { "foreground": "#B5CEA8" }
+            "settings": {
+              "foreground": "#B5CEA8"
+            }
           },
           {
             "scope": "comment.line.beguile",
-            "settings": { "foreground": "#6A9955" }
+            "settings": {
+              "foreground": "#6A9955"
+            }
           },
           {
             "scope": [
               "constant.other.dictionary-word.beguile",
               "constant.other.dictionary-word.plural.beguile"
             ],
-            "settings": { "foreground": "#C3A37A" }
+            "settings": {
+              "foreground": "#C3A37A"
+            }
           }
         ]
       },
       "editor.semanticTokenColorCustomizations": {
         "rules": {
-          "class:beguile":              "#4EC9B0",
-          "class.declaration:beguile":  "#4EC9B0",
-          "type:beguile":               "#4EC9B0",
-          "enum:beguile":               "#4EC9B0",
-          "enum.declaration:beguile":   "#4EC9B0",
-          "enumMember:beguile":         "#4FC1FF",
-          "variable:beguile":           "#9CDCFE",
-          "property:beguile":           "#9CDCFE",
+          "class:beguile": "#4EC9B0",
+          "class.declaration:beguile": "#4EC9B0",
+          "type:beguile": "#4EC9B0",
+          "enum:beguile": "#4EC9B0",
+          "enum.declaration:beguile": "#4EC9B0",
+          "enumMember:beguile": "#4FC1FF",
+          "variable:beguile": "#9CDCFE",
+          "property:beguile": "#9CDCFE",
           "property.declaration:beguile": "#9CDCFE",
-          "method:beguile":             "#DCDCAA",
+          "method:beguile": "#DCDCAA",
           "method.declaration:beguile": "#DCDCAA",
-          "function:beguile":           "#DCDCAA",
+          "function:beguile": "#DCDCAA",
           "function.declaration:beguile": "#DCDCAA"
         }
       }
@@ -272,19 +328,45 @@
     "semanticTokenScopes": [
       {
         "scopes": {
-          "type":                 ["entity.name.type"],
-          "class":                ["entity.name.type.class"],
-          "class.declaration":    ["entity.name.type.class"],
-          "enum":                 ["entity.name.type.enum"],
-          "enum.declaration":     ["entity.name.type.enum"],
-          "enumMember":           ["variable.other.enummember"],
-          "variable":             ["variable.other.readwrite"],
-          "property":             ["variable.other.property"],
-          "property.declaration": ["variable.other.property"],
-          "method":               ["entity.name.function.member"],
-          "method.declaration":   ["entity.name.function.member"],
-          "function":             ["entity.name.function"],
-          "function.declaration": ["entity.name.function"]
+          "type": [
+            "entity.name.type"
+          ],
+          "class": [
+            "entity.name.type.class"
+          ],
+          "class.declaration": [
+            "entity.name.type.class"
+          ],
+          "enum": [
+            "entity.name.type.enum"
+          ],
+          "enum.declaration": [
+            "entity.name.type.enum"
+          ],
+          "enumMember": [
+            "variable.other.enummember"
+          ],
+          "variable": [
+            "variable.other.readwrite"
+          ],
+          "property": [
+            "variable.other.property"
+          ],
+          "property.declaration": [
+            "variable.other.property"
+          ],
+          "method": [
+            "entity.name.function.member"
+          ],
+          "method.declaration": [
+            "entity.name.function.member"
+          ],
+          "function": [
+            "entity.name.function"
+          ],
+          "function.declaration": [
+            "entity.name.function"
+          ]
         }
       }
     ]
@@ -296,12 +378,13 @@
     "deploy": "tsc -p ./ && code --command workbench.action.reloadWindow"
   },
   "devDependencies": {
-    "@types/vscode": "^1.75.0",
     "@types/node": "^20.0.0",
+    "@types/vscode": "^1.75.0",
     "typescript": "^5.0.0"
   },
   "dependencies": {
+    "ifvms": "^1.1.6",
     "quixe": "^0.3.3",
-    "ifvms": "^1.1.6"
+    "vscode-languageclient": "^9.0.1"
   }
 }

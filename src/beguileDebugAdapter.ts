@@ -90,6 +90,7 @@ export class BeguileDebugAdapter implements vscode.DebugAdapter {
     private varFilter = '';
     private lastStopReason = 'breakpoint';
     private lastStepCommand: string | undefined;
+    private stepOriginRoutine: any | undefined;  // routine at step-over start (for call-depth check)
 
     public setVarFilter(filter: string): void {
         this.varFilter = filter;
@@ -147,6 +148,12 @@ export class BeguileDebugAdapter implements vscode.DebugAdapter {
                     (addr: number, vmState: VmState) => this.onVmBreak(addr, true, vmState),
                     (col) => this.onPanelClosed(col)
                 );
+                // Mirror game text output to the Debug Console in real-time
+                this.panel.onDebugOutput = (text: string) => {
+                    if (vscode.workspace.getConfiguration('Beguilex').get<boolean>('debugConsoleOutput')) {
+                        this.sendEvent('output', { category: 'stdout', output: text });
+                    }
+                };
                 this.respond(message, {});
                 // Announce all source files (.bgl and .inf) so VS Code enables
                 // breakpoints in included/generated files without opening them first.
@@ -335,8 +342,7 @@ export class BeguileDebugAdapter implements vscode.DebugAdapter {
                 if (selfAddr !== undefined && this.currentVmState) {
                     const selfObjAddr = this.currentVmState.globals[selfAddr] ?? 0;
                     const objName = selfObjAddr ? this.debugInfo?.objectByAddr(selfObjAddr) : undefined;
-                    const typeName = objName ? (this.debugInfo?.globalVarType(objName) ?? objName) : undefined;
-                    if (typeName && this.debugInfo?.typeInfo(typeName)) {
+                    if (objName && this.debugInfo?.objectTypeInfoFor(objName)) {
                         scopes.push({ name: `Self (${objName})`, variablesReference: BeguileDebugAdapter.SELF_SCOPE_REF, expensive: false });
                     }
                 }
@@ -376,8 +382,7 @@ export class BeguileDebugAdapter implements vscode.DebugAdapter {
                     if (selfAddrF !== undefined && this.currentVmState && this.debugInfo && this.panel) {
                         const selfObjAddr = this.currentVmState.globals[selfAddrF] ?? 0;
                         const objName  = selfObjAddr ? this.debugInfo.objectByAddr(selfObjAddr) : undefined;
-                        const typeName = objName ? (this.debugInfo.globalVarType(objName) ?? objName) : undefined;
-                        const typeInfo = typeName ? this.debugInfo.typeInfo(typeName) : undefined;
+                        const typeInfo = objName ? this.debugInfo.objectTypeInfoFor(objName) : undefined;
                         if (typeInfo && selfObjAddr) {
                             const reads = await Promise.all(typeInfo.props.map(p => this.expandPropAsync(p, selfObjAddr)));
                             for (const v of reads) {
@@ -406,8 +411,7 @@ export class BeguileDebugAdapter implements vscode.DebugAdapter {
                     if (selfAddr !== undefined && this.currentVmState && this.debugInfo && this.panel) {
                         const selfObjAddr = this.currentVmState.globals[selfAddr] ?? 0;
                         const objName  = selfObjAddr ? this.debugInfo.objectByAddr(selfObjAddr) : undefined;
-                        const typeName = objName ? (this.debugInfo.globalVarType(objName) ?? objName) : undefined;
-                        const typeInfo = typeName ? this.debugInfo.typeInfo(typeName) : undefined;
+                        const typeInfo = objName ? this.debugInfo.objectTypeInfoFor(objName) : undefined;
                         if (typeInfo && selfObjAddr) {
                             const reads = await Promise.all(
                                 typeInfo.props.map(p => this.expandPropAsync(p, selfObjAddr))
@@ -431,15 +435,23 @@ export class BeguileDebugAdapter implements vscode.DebugAdapter {
                     // Object globals: address is the fixed Glulx object address; value IS the address
                     for (const g of (this.debugInfo?.userGlobalObjects() ?? [])) {
                         if (f && !g.name.toLowerCase().includes(f)) { continue; }
-                        const type = this.debugInfo?.globalVarType(g.name);
-                        vars.push(this.makeVar(g.name, g.address, type));
+                        const typeInfo = this.debugInfo?.objectTypeInfoFor(g.name);
+                        if (typeInfo) {
+                            const varRef = this.nextVarRef++;
+                            this.varRefMap.set(varRef, { objAddr: g.address, typeName: typeInfo.name });
+                            vars.push({ name: g.name, value: typeInfo.name, type: typeInfo.name, variablesReference: varRef });
+                        } else {
+                            // No expandable properties — show object name, not raw address
+                            vars.push({ name: g.name, value: g.name, type: 'object', variablesReference: 0 });
+                        }
                     }
 
                 } else if (ref >= 3000) {
                     // ── Object property expansion ─────────────────────────────
                     const entry = this.varRefMap.get(ref);
                     if (entry && this.debugInfo && this.panel) {
-                        const typeInfo = this.debugInfo.typeInfo(entry.typeName);
+                        const typeInfo = this.debugInfo.objectTypeInfoFor(entry.typeName)
+                                      ?? this.debugInfo.typeInfo(entry.typeName);
                         if (typeInfo) {
                             const reads = await Promise.all(
                                 typeInfo.props.map(p => this.expandPropAsync(p, entry.objAddr))
@@ -658,9 +670,13 @@ export class BeguileDebugAdapter implements vscode.DebugAdapter {
                 this.hideI6Button();
                 this.varRefMap.clear();
                 this.lastStepCommand = message.command;
+                // Save the routine we're stepping FROM so step-over can detect calls
+                this.stepOriginRoutine = this.currentVmAddr !== undefined
+                    ? this.debugInfo?.routineContaining(this.currentVmAddr) : undefined;
 
                 let skipAddrs: number[] = [];
                 let stopAddrs: number[] = [];
+                let seqPts: number[] | undefined;
 
                 if (this.debugInfo) {
                     const infLoc = this.currentVmAddr !== undefined
@@ -673,28 +689,39 @@ export class BeguileDebugAdapter implements vscode.DebugAdapter {
                     const atInfOnly = !!infLoc && !this.currentBglFile;
 
                     if (mainInfOpen || atInfOnly) {
+                        // I6 mode: send seqPts to trigger JIT block injection
+                        seqPts = this.debugInfo.allVmAddrs();
                         skipAddrs = infLoc
                             ? this.debugInfo.vmAddrsForInfLine(infLoc.line, infLoc.path)
                             : ((this.currentBglFile && this.currentBglLine !== undefined)
                                 ? this.debugInfo.bglToVmAddrs(this.currentBglFile, this.currentBglLine)
                                 : []);
-                        if (message.command === 'next' && atInfOnly && infLoc) {
-                            stopAddrs = this.debugInfo.vmAddrsForInfFile(infLoc.path);
-                        } else if (message.command === 'stepOut' && atInfOnly && infLoc) {
+                        if (message.command === 'next') {
+                            // Step over: stop at any sequence point. Cross-file calls
+                            // are handled by auto-step in onVmBreak (skips called functions,
+                            // but allows returns to the caller). Same-line stops are
+                            // handled by same-line auto-step in onVmBreak.
+                            stopAddrs = this.debugInfo.allVmAddrs();
+                        } else if (message.command === 'stepOut' && infLoc) {
+                            // Step out: stop at first address outside the current .inf file.
                             const currentFileAddrs = new Set(this.debugInfo.vmAddrsForInfFile(infLoc.path));
                             stopAddrs = this.debugInfo.allVmAddrs().filter(a => !currentFileAddrs.has(a));
                         } else {
+                            // Step into: stop at any sequence point.
                             stopAddrs = this.debugInfo.allVmAddrs();
                         }
                     } else {
+                        // Coarse .bgl mode: use mapped addrs for both stop and seqPts.
+                        // seqPts = mapped addrs ensures JIT blocks split at .bgl lines
+                        // (without this, multi-line blocks skip intermediate lines).
                         skipAddrs = (this.currentBglFile && this.currentBglLine !== undefined)
                             ? this.debugInfo.bglToVmAddrs(this.currentBglFile, this.currentBglLine)
                             : [];
                         stopAddrs = this.debugInfo.allMappedVmAddrs();
+                        seqPts = this.debugInfo.allMappedVmAddrs();
                     }
                 }
 
-                const seqPts = this.debugInfo?.allVmAddrs();
                 this.panel?.sendStep(skipAddrs, stopAddrs, seqPts);
                 this.respond(message, {});
                 break;
@@ -749,6 +776,30 @@ export class BeguileDebugAdapter implements vscode.DebugAdapter {
             this.currentBglFile = loc?.file;
             this.currentBglLine = loc?.line;
 
+            // Step-over call detection: if we landed at the ENTRY of a different
+            // routine, we entered a function call — auto-step past it.
+            // If we're MID-routine in a different function, we RETURNED from
+            // the origin — stop and show the caller's line.
+            if (isStep && loc && this.lastStepCommand === 'next' && this.stepOriginRoutine) {
+                const newRoutine = this.debugInfo.routineContaining(vmAddr);
+                if (newRoutine && newRoutine !== this.stepOriginRoutine) {
+                    // We're in a different routine. Find the next mapped address
+                    // in the ORIGIN routine (the return point after the call) and
+                    // continue to it — this is how traditional step-over works.
+                    const originStart = this.stepOriginRoutine.startAddr;
+                    const originEnd   = this.stepOriginRoutine.endAddr;
+                    const mappedAddrs = this.debugInfo.allMappedVmAddrs();
+                    const returnAddrs = mappedAddrs.filter(
+                        a => a >= originStart && a < originEnd
+                    );
+                    if (returnAddrs.length > 0) {
+                        this.panel?.sendStep([vmAddr], returnAddrs, mappedAddrs);
+                        return;
+                    }
+                    // No mapped addrs in origin routine — fall through and show
+                }
+            }
+
             if (isStep && !loc) {
                 const infLoc2 = this.debugInfo.vmAddrToInfLocation(vmAddr);
                 const mainInfPath = this.config.infPath;
@@ -758,6 +809,7 @@ export class BeguileDebugAdapter implements vscode.DebugAdapter {
                 );
                 const showTarget = this.lastStepCommand === 'stepIn' || this.lastStepCommand === 'stepOut';
                 dbgLog(`unmapped step @ 0x${vmAddr.toString(16)} inI6=${inI6Mode} show=${showTarget}`);
+
                 if (!inI6Mode && !showTarget) {
                     dbgLog(`  auto-step to bgl`);
                     const mappedAddrs = this.debugInfo.allMappedVmAddrs();
@@ -767,6 +819,17 @@ export class BeguileDebugAdapter implements vscode.DebugAdapter {
             }
 
             const infLoc = this.debugInfo.vmAddrToInfLocation(vmAddr);
+
+            // Same-line auto-step: one I6 line may compile to multiple Z-machine
+            // instructions. Skip duplicate stops on the same line during step-over.
+            if (isStep && this.lastStepCommand === 'next' && infLoc && this.currentInfLocation &&
+                infLoc.path === this.currentInfLocation.path &&
+                infLoc.line === this.currentInfLocation.line) {
+                const skipAddrs = this.debugInfo.vmAddrsForInfLine(infLoc.line, infLoc.path);
+                this.panel?.sendStep(skipAddrs, this.debugInfo.allVmAddrs(), this.debugInfo.allVmAddrs());
+                return;
+            }
+
             this.currentInfLocation = infLoc;
             this.currentInfLine = infLoc?.line;
             if (infLoc) {
@@ -957,38 +1020,7 @@ export class BeguileDebugAdapter implements vscode.DebugAdapter {
             ? await this.panel.readProperty(objAddr, propNum)
             : null;
         const raw = Array.isArray(val) ? (val[0] ?? 0) : (val ?? 0);
-        return this.makeVarAsync(p.bglName, raw, p.type);
-    }
-
-    /**
-     * Resolve a generic `object`-typed variable to its specific Beguile type by
-     * scanning the live global state.  Two strategies, in order:
-     *
-     * 1. Glulx: `objectByAddr(raw)` gives the I6 name directly from the .dbg
-     *    object table (memory address → identifier).
-     * 2. Both platforms: scan all typed globals whose current runtime value
-     *    matches `raw`.  E.g. if `location == 7` and `bar`'s slot also == 7,
-     *    we infer location is a `bar` (type `room`).
-     *
-     * Returns the resolved type name, or undefined if unresolvable.
-     */
-    private resolveObjectType(raw: number): string | undefined {
-        if (!raw || !this.debugInfo) { return undefined; }
-        // Strategy 1: Glulx direct lookup
-        const objName = this.debugInfo.objectByAddr(raw);
-        if (objName) {
-            return this.debugInfo.globalVarType(objName) ?? objName;
-        }
-        // Strategy 2: scan typed globals for a value match
-        if (this.currentVmState) {
-            const globalVals = this.currentVmState.globals;
-            for (const g of this.debugInfo.userGlobals()) {
-                const gType = this.debugInfo.globalVarType(g.name);
-                if (!gType || !this.debugInfo.typeInfo(gType)) { continue; }
-                if (globalVals[g.address] === raw) { return gType; }
-            }
-        }
-        return undefined;
+        return this.makeVarAsync(p.bglName, raw, p.type || undefined);
     }
 
     private async makeVarAsync(name: string, raw: number, bglType: string | undefined): Promise<any> {
@@ -996,10 +1028,24 @@ export class BeguileDebugAdapter implements vscode.DebugAdapter {
         if (bglType === 'string' && this.panel && raw) {
             decoded = (await this.panel.decodeString(raw)) ?? undefined;
         }
-        // For generic `object` type, try to resolve to a specific type at runtime
-        if (bglType === 'object') {
-            const resolved = this.resolveObjectType(raw);
-            if (resolved) { bglType = resolved; }
+        // For generic `object` type, try to resolve to a named object at runtime
+        if (bglType === 'object' && raw && this.debugInfo) {
+            const objName = this.debugInfo.objectByAddr(raw);
+            if (objName) {
+                // Check for a specific typed class (e.g. room)
+                const typed = this.debugInfo.globalVarType(objName);
+                if (typed && typed !== 'object' && this.debugInfo.typeInfo(typed)) {
+                    bglType = typed;
+                } else {
+                    // Use per-object sym info if available (expandable), otherwise show name only
+                    const objInfo = this.debugInfo.objectTypeInfoFor(objName);
+                    if (objInfo) {
+                        bglType = objName;
+                    } else {
+                        return { name, value: objName, type: 'object', variablesReference: 0 };
+                    }
+                }
+            }
         }
         return this.makeVar(name, raw, bglType, decoded);
     }
@@ -1021,10 +1067,11 @@ export class BeguileDebugAdapter implements vscode.DebugAdapter {
             return { name, value: display, type: bglType, variablesReference: 0 };
         }
         // Object type — expandable if we have type info for it
-        if (this.debugInfo?.typeInfo(bglType)) {
+        const objTypeInfo = this.debugInfo?.typeInfo(bglType) ?? this.debugInfo?.objectTypeInfoFor(bglType);
+        if (objTypeInfo) {
             const varRef = this.nextVarRef++;
-            this.varRefMap.set(varRef, { objAddr: raw, typeName: bglType });
-            return { name, value: bglType, type: bglType, variablesReference: varRef };
+            this.varRefMap.set(varRef, { objAddr: raw, typeName: objTypeInfo.name });
+            return { name, value: objTypeInfo.name, type: objTypeInfo.name, variablesReference: varRef };
         }
         // Known type name but no property info yet — show as plain int
         return { name, value: String(raw), type: bglType, variablesReference: 0 };

@@ -89,6 +89,8 @@ export class DebugInfo {
     private enumMap      = new Map<string, Map<number, string>>();
     /** I6 attribute bit number → attribute name (from .dbg <attribute> entries) */
     private attrBitMap   = new Map<number, string>();
+    /** Per-object property lists from [sym] section (objName → BglProp[]) */
+    private objSymProps  = new Map<string, BglProp[]>();
     /** I6 object identifier → Glulx memory address (from .dbg <object> entries) */
     private i6ObjMap     = new Map<string, number>();
     /** Reverse: Glulx memory address → I6 object identifier */
@@ -143,9 +145,22 @@ export class DebugInfo {
                     }
                     break;
                 }
-                case 'sym':
-                    // Reserved for future use — skip
+                case 'sym': {
+                    // Parse object property entries: "objName.propName i6Name property"
+                    const dotIdx = line.indexOf('.');
+                    if (dotIdx > 0) {
+                        const symParts = line.split(/\t/);
+                        if (symParts.length >= 3 && symParts[2] === 'property') {
+                            const objName  = symParts[0].substring(0, dotIdx);
+                            const i6Name   = symParts[1];
+                            const bglName  = symParts[0].substring(dotIdx + 1);
+                            let props = this.objSymProps.get(objName);
+                            if (!props) { props = []; this.objSymProps.set(objName, props); }
+                            props.push({ bglName, i6Name, type: '' });
+                        }
+                    }
                     break;
+                }
                 case 'types': {
                     if (line.startsWith('#')) break;
                     const parts = line.split(/\s+/);
@@ -195,6 +210,20 @@ export class DebugInfo {
                     }
                     break;
                 }
+            }
+        }
+
+        // Post-process: resolve sym property types from type definitions.
+        // Build i6Name → type map from all typed properties, then fill in sym entries.
+        const i6PropType = new Map<string, string>();
+        for (const typeInfo of this.bglTypeMap.values()) {
+            for (const p of typeInfo.props) {
+                if (p.type) { i6PropType.set(p.i6Name, p.type); }
+            }
+        }
+        for (const props of this.objSymProps.values()) {
+            for (const p of props) {
+                if (!p.type) { p.type = i6PropType.get(p.i6Name) ?? ''; }
             }
         }
     }
@@ -389,6 +418,23 @@ export class DebugInfo {
     /** Beguile type info by name, or undefined if not in .types. */
     typeInfo(typeName: string): BglTypeInfo | undefined {
         return this.bglTypeMap.get(typeName);
+    }
+
+    /**
+     * Type info for a specific object instance.  Tries the declared type first
+     * (via globalVarType → typeInfo); falls back to per-object sym properties
+     * so bare `object` instances still show their members in the Self scope.
+     */
+    objectTypeInfoFor(objName: string): BglTypeInfo | undefined {
+        const typeName = this.globalVarType(objName) ?? objName;
+        const typed = this.bglTypeMap.get(typeName);
+        if (typed) { return typed; }
+        // Fall back to sym-section properties for this specific object
+        const symProps = this.objSymProps.get(objName);
+        if (symProps && symProps.length > 0) {
+            return { name: objName, props: symProps };
+        }
+        return undefined;
     }
 
     /** True if typeName is a known Beguile enum. */

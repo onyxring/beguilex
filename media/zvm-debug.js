@@ -22,6 +22,18 @@
     var _origRun     = ZVM.prototype.run;
     var _origResume  = ZVM.prototype.resume;
     var _origCompile = ZVM.prototype.compile;
+    var _origPrint   = ZVM.prototype._print;
+
+    /* ── Debug output capture ────────────────────────────────────────── */
+    /* Wraps ZVM._print to mirror game text to the extension host in
+     * real-time (via DAP output event) so it appears in the Debug Console
+     * immediately, without waiting for Glk.update() to flush the panel. */
+    ZVM.prototype._print = function(text) {
+        _origPrint.call(this, text);
+        if (window._bglDebugOutput) {
+            window._bglDebugOutput(text);
+        }
+    };
     /* ── Patched start() ─────────────────────────────────────────────── */
     /* ZVM's init() is a bootstrap that sets this.init = this.start.
      * The real work (restart + run + Glk setup) happens in start().
@@ -66,56 +78,83 @@
      * recompile with a fake rtrue (0xB0) at that address to force the
      * disassembler to stop there. Then fix the generated "return 1" to
      * "e.pc=splitAddr; e.stop=1" so the run loop resumes from real code. */
+    /* ── Patched compile() — inject step/bp checks into compiled blocks ─
+     * Instead of truncating blocks (which breaks branch targets), we inject
+     * inline checks at every seq-pt/bp address inside the block. When a
+     * check fires, it sets e.pc and e.stop=1 to exit the run loop. */
     ZVM.prototype.compile = function() {
         var seqPts = window._bglAllSeqPtAddrs;
-        if (!seqPts || !seqPts.size) { _origCompile.call(this); return; }
+        var bps    = window._bglBP;
+        var log = window._bglLog || function(){};
 
         var startPc = this.pc;
         _origCompile.call(this);
-        var endPc = this.pc;   // ZVM leaves this.pc at end of block after disassemble
+        var endPc = this.pc;
 
-        // Find the first seq-pt address strictly inside (startPc, endPc)
-        var firstSplit = -1;
-        seqPts.forEach(function(addr) {
-            if (addr > startPc && addr < endPc) {
-                if (firstSplit === -1 || addr < firstSplit) firstSplit = addr;
-            }
-        });
-        if (firstSplit === -1) return;
+        if ((!seqPts || !seqPts.size) && (!bps || !bps.size)) return;
 
-        // The compiled function has a label comment before each instruction:
-        //   /* PC/opcode */
-        // Find the label for firstSplit and truncate the function body there,
-        // then append "e.pc=firstSplit" so the run loop picks up at that address
-        // (where the step check will fire) without using a fake opcode.
+        /* Collect all addresses inside this block that need a step/bp check. */
+        var checkAddrs = [];
+        var addIfInside = function(addr) {
+            if (addr > startPc && addr < endPc) checkAddrs.push(addr);
+        };
+        if (seqPts) seqPts.forEach(addIfInside);
+        if (bps) bps.forEach(addIfInside);
+
+        if (checkAddrs.length === 0) return;
+
+        /* Get the compiled function source and inject checks at each address.
+         * ZVM's compiled blocks have label comments: / * ADDR/opcode * /
+         * We insert a check BEFORE each label that can exit the block. */
         var fn = this.jit[startPc];
+        if (!fn) return;
         var src = fn.toString();
         var body = src.replace(/^[^{]*\{([\s\S]*)\}[^}]*$/, '$1');
-        var marker = '/* ' + firstSplit + '/';
-        var cutIdx = body.indexOf(marker);
-        if (cutIdx === -1) { return; }
 
-        /* The marker may appear INSIDE an expression (e.g. as an inline value
-         * annotation: setUint16(addr, /* PC/ value)) rather than at a statement
-         * boundary.  Scan backward from the marker to find the end of the
-         * previous complete statement (';' or '}'), then cut there so we always
-         * produce syntactically valid JS. */
-        var stmtBoundary = cutIdx;
-        while (stmtBoundary > 0 &&
-               body[stmtBoundary - 1] !== ';' &&
-               body[stmtBoundary - 1] !== '}') {
-            stmtBoundary--;
+        /* Sort descending so insertions don't shift later positions. */
+        checkAddrs.sort(function(a,b){ return b - a; });
+        var modified = false;
+        for (var i = 0; i < checkAddrs.length; i++) {
+            var addr = checkAddrs[i];
+            var marker = '/* ' + addr + '/';
+            var idx = body.indexOf(marker);
+            if (idx === -1) continue;
+
+            /* The marker may be inside an expression (e.g. setUint16(x, /* PC/ val)).
+             * Scan backward to find a statement boundary so we insert valid JS. */
+            var insertAt = idx;
+            while (insertAt > 0 &&
+                   body[insertAt - 1] !== ';' &&
+                   body[insertAt - 1] !== '{') {
+                insertAt--;
+            }
+
+            /* Only set e.pc and exit when a check actually matches.
+             * Previously e.pc=addr ran unconditionally, corrupting e.pc
+             * for the rest of the block even when no check fired. */
+            var check =
+                'if(window._bglBP&&window._bglBP.has(' + addr + ')&&' + addr + '!==window._bglSkipPC){' +
+                  'e.pc=' + addr + ';window._bglSkipPC=null;e._bglDebugBreak=true;e.stop=1;window._bglBreakPausing=true;' +
+                  'if(window._bglOnBreak)window._bglOnBreak(' + addr + ');return;}' +
+                'if(window._bglStepMode){' +
+                  'var _s=!window._bglStepStopAt||window._bglStepStopAt.has(' + addr + ');' +
+                  'var _k=window._bglStepSkipAddrs&&window._bglStepSkipAddrs.has(' + addr + ');' +
+                  'if(_s&&!_k){' +
+                  'e.pc=' + addr + ';window._bglSkipPC=null;window._bglStepMode=false;' +
+                  'e._bglDebugBreak=true;e.stop=1;window._bglBreakPausing=true;' +
+                  'if(window._bglOnStep)window._bglOnStep(' + addr + ');return;}}' +
+                'window._bglSkipPC=null;';
+            body = body.slice(0, insertAt) + check + body.slice(insertAt);
+            modified = true;
         }
 
-        var newBody = body.slice(0, stmtBoundary) + 'e.pc=' + firstSplit + ';';
-        try {
-            this.jit[startPc] = new Function('e', newBody);
-        } catch(e2) {
-            /* Leave the original un-split block intact; step fires at next boundary. */
+        if (modified) {
+            try {
+                this.jit[startPc] = new Function('e', body);
+            } catch(e2) {
+                log('[zvm] inject compile FAILED at 0x' + startPc.toString(16) + ': ' + e2);
+            }
         }
-
-        // Delete any stale cache entry at firstSplit so real code compiles fresh
-        delete this.jit[firstSplit];
     };
 
     /* ── Patched run() ──────────────────────────────────────────────── */

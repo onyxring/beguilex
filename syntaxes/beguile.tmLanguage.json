@@ -247,9 +247,9 @@
           "match": "#once\\b"
         },
         {
-          "comment": "#message, #warning, #error, #exit directives",
+          "comment": "#message, #warning, #error, #exit, #using directives",
           "name": "keyword.control.directive.beguile",
-          "match": "#(?:message|warning|error|exit)\\b"
+          "match": "#(?:message|warning|error|exit|using)\\b"
         },
         {
           "comment": "#beguilerSettings block header or property reference (#beguilerSettings.propName)",
@@ -257,9 +257,9 @@
           "match": "#beguilerSettings\\b(?:\\.[a-zA-Z_][a-zA-Z0-9_]*)?"
         },
         {
-          "comment": "#startup runtime initialization block",
+          "comment": "#startup, #emitfirst, #emitlast directives",
           "name": "keyword.control.directive.beguile",
-          "match": "#startup\\b"
+          "match": "#(?:startup|emitfirst|emitlast)\\b"
         }
       ]
     },

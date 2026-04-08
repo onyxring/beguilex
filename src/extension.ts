@@ -2,16 +2,13 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as cp from 'child_process';
 import * as fs from 'fs';
-import { BeguileSemanticTokensProvider, tokenLegend } from './semanticTokens';
-import { BeguileCompletionItemProvider } from './completions';
-import { BeguileHoverProvider } from './hover';
-import { BeguileSignatureHelpProvider } from './signatureHelp';
-import { BeguileDefinitionProvider } from './definition';
+import { LanguageClient, LanguageClientOptions, ServerOptions } from 'vscode-languageclient/node';
 import { BeguileDebugAdapterFactory, openI6SourceCommand, openBglSourceCommand, setBeguileOutputChannel, setActiveVarFilter } from './beguileDebugAdapter';
 import { VariableFilterViewProvider } from './variableFilterView';
 import { setDebugPanelOutputChannel } from './debugPanel';
 
 const outputChannel = vscode.window.createOutputChannel('Beguile');
+let lspClient: LanguageClient | undefined;
 
 /** Build the beguiler binary path and CLI args string from extension settings. */
 function beguilerCommand(): { bin: string; args: string } {
@@ -68,7 +65,7 @@ function newestExisting(candidates: string[]): string | undefined {
 }
 
 export function activate(context: vscode.ExtensionContext) {
-    outputChannel.appendLine('[Beguile] Extension activated (quixe-debug-v2)');
+    outputChannel.appendLine('[Beguilex] Extension activated');
     setBeguileOutputChannel(outputChannel);
     setDebugPanelOutputChannel(outputChannel);
 
@@ -223,31 +220,24 @@ export function activate(context: vscode.ExtensionContext) {
 
     context.subscriptions.push(debugCommand);
 
-    context.subscriptions.push(
-        vscode.languages.registerDocumentSemanticTokensProvider(
-            { language: 'beguile' },
-            new BeguileSemanticTokensProvider(),
-            tokenLegend
-        ),
-        vscode.languages.registerCompletionItemProvider(
-            { language: 'beguile' },
-            new BeguileCompletionItemProvider(),
-            '.', '='  // trigger on dot and assignment
-        ),
-        vscode.languages.registerHoverProvider(
-            { language: 'beguile' },
-            new BeguileHoverProvider()
-        ),
-        vscode.languages.registerSignatureHelpProvider(
-            { language: 'beguile' },
-            new BeguileSignatureHelpProvider(),
-            '(', ','
-        ),
-        vscode.languages.registerDefinitionProvider(
-            { language: 'beguile' },
-            new BeguileDefinitionProvider()
-        )
-    );
+    // ── Language Server ─────────────────────────────────────────────────────
+    const beguilerBin = vscode.workspace.getConfiguration('beguiler').get<string>('path') || 'beguiler';
+    const serverOptions: ServerOptions = {
+        command: beguilerBin,
+        args: ['--lsp'],
+    };
+    const clientOptions: LanguageClientOptions = {
+        documentSelector: [{ scheme: 'file', language: 'beguile' }],
+        outputChannel,
+    };
+    lspClient = new LanguageClient('beguile', 'Beguile Language Server', serverOptions, clientOptions);
+    lspClient.setTrace(vscode.env.logLevel === vscode.LogLevel.Debug
+        ? 2 /* Verbose */ : 1 /* Messages */);
+    lspClient.start();
+    context.subscriptions.push(lspClient);
+    outputChannel.appendLine('[Beguilex] LSP client started: ' + beguilerBin + ' --lsp');
 }
 
-export function deactivate() {}
+export async function deactivate() {
+    if (lspClient) { await lspClient.stop(); }
+}
