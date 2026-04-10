@@ -221,21 +221,27 @@ export function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(debugCommand);
 
     // ── Language Server ─────────────────────────────────────────────────────
-    const beguilerBin = vscode.workspace.getConfiguration('beguiler').get<string>('path') || 'beguiler';
+    // Pass all the same settings args to the LSP server as we do for compile/debug.
+    const { bin: lspBin, args: lspArgs } = beguilerCommand();
     const serverOptions: ServerOptions = {
-        command: beguilerBin,
-        args: ['--lsp'],
+        command: lspBin,
+        args: ['--lsp', ...lspArgs.split(' ').filter(a => a)],
     };
+    const traceChannel = vscode.window.createOutputChannel('Beguile LSP Trace');
     const clientOptions: LanguageClientOptions = {
         documentSelector: [{ scheme: 'file', language: 'beguile' }],
         outputChannel,
+        traceOutputChannel: traceChannel,
     };
     lspClient = new LanguageClient('beguile', 'Beguile Language Server', serverOptions, clientOptions);
-    lspClient.setTrace(vscode.env.logLevel === vscode.LogLevel.Debug
-        ? 2 /* Verbose */ : 1 /* Messages */);
-    lspClient.start();
+    lspClient.setTrace(2 as any); // Verbose
+    lspClient.start().then(() => {
+        outputChannel.appendLine('[Beguilex] LSP client connected');
+    }, (err) => {
+        outputChannel.appendLine('[Beguilex] LSP client FAILED: ' + err);
+    });
     context.subscriptions.push(lspClient);
-    outputChannel.appendLine('[Beguilex] LSP client started: ' + beguilerBin + ' --lsp');
+    outputChannel.appendLine('[Beguilex] LSP client starting: ' + lspBin + ' --lsp ' + lspArgs);
 }
 
 export async function deactivate() {
