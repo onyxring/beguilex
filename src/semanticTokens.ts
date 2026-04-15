@@ -562,7 +562,7 @@ function findSystemInclude(name: string): string | null {
     return result;
 }
 
-// Locate _beguileCore.bgl using the configured libraryPath setting first,
+// Locate __beguileCore.bgl using the configured libraryPath setting first,
 // then falling back to a synchronous workspace search.
 function findCoreLibrary(): string | null {
     const config  = vscode.workspace.getConfiguration('beguiler');
@@ -571,11 +571,11 @@ function findCoreLibrary(): string | null {
     if (libPath) {
         const base      = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? '';
         const resolved  = path.isAbsolute(libPath) ? libPath : path.join(base, libPath);
-        const found     = findFileRecursive(resolved, '_beguileCore.bgl');
+        const found     = findFileRecursive(resolved, '__beguileCore.bgl');
         if (found) return found;
     }
 
-    return findSystemInclude('_beguileCore');
+    return findSystemInclude('__beguileCore');
 }
 
 // Recursively walk #include directives, collecting declarations and members

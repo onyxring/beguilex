@@ -6,12 +6,13 @@ import { LanguageClient, LanguageClientOptions, ServerOptions } from 'vscode-lan
 import { BeguileDebugAdapterFactory, openI6SourceCommand, openBglSourceCommand, setBeguileOutputChannel, setActiveVarFilter } from './beguileDebugAdapter';
 import { VariableFilterViewProvider } from './variableFilterView';
 import { setDebugPanelOutputChannel } from './debugPanel';
+import { BeguileSemanticTokensProvider, tokenLegend } from './semanticTokens';
 
 const outputChannel = vscode.window.createOutputChannel('Beguile');
 let lspClient: LanguageClient | undefined;
 
 /** Build the beguiler binary path and CLI args string from extension settings. */
-function beguilerCommand(): { bin: string; args: string } {
+function beguilerCommand(isDebug: boolean = false): { bin: string; args: string } {
     const bCfg  = vscode.workspace.getConfiguration('beguiler');
     const i6Cfg = vscode.workspace.getConfiguration('i6');
     const bin: string = bCfg.get('path') || 'beguiler';
@@ -48,6 +49,10 @@ function beguilerCommand(): { bin: string; args: string } {
     const extraInform: string = i6Cfg.get('inform6ExtraArgs') || '';
     if (extraInform) { parts.push(extraInform); }
 
+    if (isDebug && i6Cfg.get<boolean>('passDebugFlag', true)) {
+        parts.push('-D');
+    }
+
     return { bin, args: parts.join(' ') };
 }
 
@@ -71,6 +76,14 @@ export function activate(context: vscode.ExtensionContext) {
 
     context.subscriptions.push(
         vscode.debug.registerDebugAdapterDescriptorFactory('beguile', new BeguileDebugAdapterFactory(context))
+    );
+
+    context.subscriptions.push(
+        vscode.languages.registerDocumentSemanticTokensProvider(
+            { scheme: 'file', language: 'beguile' },
+            new BeguileSemanticTokensProvider(),
+            tokenLegend
+        )
     );
 
     const filterView = new VariableFilterViewProvider(context, (filter) => setActiveVarFilter(filter));
@@ -149,7 +162,7 @@ export function activate(context: vscode.ExtensionContext) {
             return;
         }
         const bglPath = editor.document.uri.fsPath;
-        const { bin, args } = beguilerCommand();
+        const { bin, args } = beguilerCommand(true);
 
         // Compile with --debug
         outputChannel.clear();
@@ -234,12 +247,63 @@ export function activate(context: vscode.ExtensionContext) {
         traceOutputChannel: traceChannel,
     };
     lspClient = new LanguageClient('beguile', 'Beguile Language Server', serverOptions, clientOptions);
-    lspClient.setTrace(2 as any); // Verbose
+
+    const inactiveDecoration = vscode.window.createTextEditorDecorationType({
+        opacity: '0.3',
+        isWholeLine: true,
+    });
+    context.subscriptions.push(inactiveDecoration);
+
+    const inactiveRangesByUri = new Map<string, vscode.Range[]>();
+
+    const applyInactiveDecorations = (editor: vscode.TextEditor) => {
+        const ranges = inactiveRangesByUri.get(editor.document.uri.toString()) ?? [];
+        editor.setDecorations(inactiveDecoration, ranges);
+    };
+
+    context.subscriptions.push(
+        vscode.window.onDidChangeVisibleTextEditors((editors) => {
+            for (const e of editors) if (e.document.languageId === 'beguile') applyInactiveDecorations(e);
+        })
+    );
+
     lspClient.start().then(() => {
         outputChannel.appendLine('[Beguilex] LSP client connected');
+        lspClient!.onNotification('beguile/inactiveRegions', (params: { uri: string; ranges: { start: { line: number; character: number }; end: { line: number; character: number } }[] }) => {
+            // LSP ranges are end-exclusive. For whole-line decorations, an end
+            // at {line:N, char:0} represents "up to but not including line N"
+            // — but VS Code's decoration engine treats such a range as
+            // intersecting line N and dims it anyway. Clamp the end to the
+            // real end of the previous line so the trailing #else/#endif
+            // construct stays at full opacity.
+            const ranges = params.ranges.map(r => {
+                let endLine = r.end.line;
+                let endChar = r.end.character;
+                if (endChar === 0 && endLine > r.start.line) {
+                    endLine = endLine - 1;
+                    endChar = Number.MAX_SAFE_INTEGER;
+                }
+                return new vscode.Range(
+                    new vscode.Position(r.start.line, r.start.character),
+                    new vscode.Position(endLine, endChar)
+                );
+            });
+            inactiveRangesByUri.set(params.uri, ranges);
+            for (const editor of vscode.window.visibleTextEditors) {
+                if (editor.document.uri.toString() === params.uri) {
+                    applyInactiveDecorations(editor);
+                }
+            }
+        });
     }, (err) => {
         outputChannel.appendLine('[Beguilex] LSP client FAILED: ' + err);
     });
+
+    context.subscriptions.push(
+        vscode.workspace.onDidCloseTextDocument((doc) => {
+            inactiveRangesByUri.delete(doc.uri.toString());
+        })
+    );
     context.subscriptions.push(lspClient);
     outputChannel.appendLine('[Beguilex] LSP client starting: ' + lspBin + ' --lsp ' + lspArgs);
 }

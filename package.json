@@ -165,6 +165,24 @@
             "type": "string",
             "default": "",
             "description": "Extra command-line arguments forwarded to the Inform 6 compiler."
+          },
+          "i6.passDebugFlag": {
+            "order": 3,
+            "type": "boolean",
+            "default": false,
+            "markdownDescription": "When enabled, pass `-D` to the Inform 6 compiler during debug builds. This defines the `DEBUG` constant, enabling debug verbs such as `ACTIONS`, `PURLOIN`, `GOTO`, and `TRACE`."
+          }
+        }
+      },
+      {
+        "title": "Language Server",
+        "id": "beguile",
+        "properties": {
+          "beguile.trace.server": {
+            "type": "string",
+            "enum": ["off", "messages", "compact", "verbose"],
+            "default": "off",
+            "description": "Traces the communication between VS Code and the Beguile language server."
           }
         }
       }
@@ -242,87 +260,6 @@
     "configurationDefaults": {
       "[beguile]": {
         "editor.semanticHighlighting.enabled": true
-      },
-      "editor.tokenColorCustomizations": {
-        "textMateRules": [
-          {
-            "scope": [
-              "storage.type.beguile",
-              "storage.modifier.beguile",
-              "storage.type.primitive.beguile"
-            ],
-            "settings": {
-              "foreground": "#569CD6"
-            }
-          },
-          {
-            "scope": "keyword.control.beguile",
-            "settings": {
-              "foreground": "#C586C0"
-            }
-          },
-          {
-            "scope": [
-              "keyword.control.directive.beguile",
-              "keyword.control.directive.include.beguile",
-              "keyword.control.directive.define.beguile",
-              "keyword.control.directive.conditional.beguile"
-            ],
-            "settings": {
-              "foreground": "#C586C0"
-            }
-          },
-          {
-            "scope": "constant.language.beguile",
-            "settings": {
-              "foreground": "#569CD6"
-            }
-          },
-          {
-            "scope": "string.quoted.double.beguile",
-            "settings": {
-              "foreground": "#CE9178"
-            }
-          },
-          {
-            "scope": "constant.numeric.beguile",
-            "settings": {
-              "foreground": "#B5CEA8"
-            }
-          },
-          {
-            "scope": "comment.line.beguile",
-            "settings": {
-              "foreground": "#6A9955"
-            }
-          },
-          {
-            "scope": [
-              "constant.other.dictionary-word.beguile",
-              "constant.other.dictionary-word.plural.beguile"
-            ],
-            "settings": {
-              "foreground": "#C3A37A"
-            }
-          }
-        ]
-      },
-      "editor.semanticTokenColorCustomizations": {
-        "rules": {
-          "class:beguile": "#4EC9B0",
-          "class.declaration:beguile": "#4EC9B0",
-          "type:beguile": "#4EC9B0",
-          "enum:beguile": "#4EC9B0",
-          "enum.declaration:beguile": "#4EC9B0",
-          "enumMember:beguile": "#4FC1FF",
-          "variable:beguile": "#9CDCFE",
-          "property:beguile": "#9CDCFE",
-          "property.declaration:beguile": "#9CDCFE",
-          "method:beguile": "#DCDCAA",
-          "method.declaration:beguile": "#DCDCAA",
-          "function:beguile": "#DCDCAA",
-          "function.declaration:beguile": "#DCDCAA"
-        }
       }
     },
     "semanticTokenScopes": [
@@ -350,9 +287,11 @@
             "variable.other.readwrite"
           ],
           "property": [
+            "support.type.property-name",
             "variable.other.property"
           ],
           "property.declaration": [
+            "support.type.property-name",
             "variable.other.property"
           ],
           "method": [

@@ -184,17 +184,17 @@
     },
 
     "dictionary-words": {
-      "comment": "Dictionary word literals: ..word (plural) or .word (singular). Negative lookbehind prevents matching member access on identifiers.",
+      "comment": "Dictionary word literals: ..word (plural) or .word (singular). Negative lookbehind prevents matching member access on identifiers. Scope prefix is string.unquoted so themes color them in the string bucket by default; the .dictionary-word.beguile suffix lets users target dict words specifically in overrides.",
       "patterns": [
         {
-          "name": "constant.other.dictionary-word.plural.beguile",
+          "name": "string.unquoted.dictionary-word.plural.beguile",
           "match": "\\.\\.[a-zA-Z_][a-zA-Z0-9_]*"
         },
         {
-          "name": "constant.other.dictionary-word.beguile",
+          "name": "string.unquoted.dictionary-word.beguile",
           "match": "(?<![a-zA-Z0-9_])\\.([a-zA-Z_][a-zA-Z0-9_]*)",
           "captures": {
-            "0": { "name": "constant.other.dictionary-word.beguile" }
+            "0": { "name": "string.unquoted.dictionary-word.beguile" }
           }
         }
       ]
@@ -224,21 +224,20 @@
           }
         },
         {
-          "comment": "#define NAME value",
+          "comment": "#define NAME — value portion is left unscoped so the main grammar colors numbers/strings/identifiers naturally (matches C/C++/C# behavior).",
           "name": "meta.preprocessor.define.beguile",
-          "match": "(#define)\\s+([a-zA-Z_][a-zA-Z0-9_]*)(?:\\s+(.*))?$",
+          "match": "(#define)\\s+([a-zA-Z_][a-zA-Z0-9_]*)",
           "captures": {
             "1": { "name": "keyword.control.directive.define.beguile" },
-            "2": { "name": "entity.name.constant.beguile" },
-            "3": { "name": "constant.other.beguile" }
+            "2": { "name": "entity.name.constant.beguile" }
           }
         },
         {
-          "comment": "#if / #elif / #else / #endif conditional compilation",
+          "comment": "#if / #elif / #else / #endif conditional compilation — condition expression is left unscoped so the main grammar colors identifiers naturally (matches C/C++/C# behavior).",
           "name": "meta.preprocessor.conditional.beguile",
-          "match": "#(?:if|elif|else|endif)\\b.*$",
+          "match": "(#(?:if|elif|else|endif))\\b",
           "captures": {
-            "0": { "name": "keyword.control.directive.conditional.beguile" }
+            "1": { "name": "keyword.control.directive.conditional.beguile" }
           }
         },
         {
@@ -298,7 +297,7 @@
 
     "keywords-type-primitive": {
       "name": "storage.type.primitive.beguile",
-      "match": "\\b(int|bool|string|char|void|var|array|func|eBool|dictionaryWord)\\b"
+      "match": "\\b(int|uint|bool|string|char|void|var|array|func|eBool|dictionaryWord)\\b"
     },
 
     "constants-language": {
@@ -331,7 +330,7 @@
         },
         {
           "name": "keyword.operator.beguile",
-          "match": "\\?\\.|\\.\\.|==|!=|=~|<=|>=|=>|&&|\\|\\||\\+\\+|--|\\+=|-=|\\*=|/=|%=|\\|=|&=|\\^=|<<|>>|\\?\\?"
+          "match": "\\?\\.|\\.\\.|==|!=|=~|<<=|>>=|<=|>=|=>|&&|\\|\\||\\+\\+|--|\\+=|-=|\\*=|/=|%=|\\|=|&=|\\^=|<<|>>|\\?\\?"
         },
         {
           "name": "keyword.operator.beguile",
