@@ -98,31 +98,74 @@ export function activate(context: vscode.ExtensionContext) {
         vscode.commands.registerCommand('beguile.openBglSource', openBglSourceCommand)
     );
 
+    // ── Status bar: "Beguile-augmented .inf" indicator ────────────────────────
+    // Lights up when the active editor is a .inf file containing one or more
+    // #bgl regions. Helps discoverability for users opening unfamiliar mixed-mode files.
+    const bglInfStatusItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 50);
+    bglInfStatusItem.text = '$(beaker) Beguile-augmented .inf';
+    bglInfStatusItem.tooltip = 'This .inf file contains #bgl{} blocks — Beguile completion/hover/definition work inside them.';
+    context.subscriptions.push(bglInfStatusItem);
+
+    const updateBglInfStatus = (editor: vscode.TextEditor | undefined) => {
+        if (!editor || editor.document.languageId !== 'inform6') {
+            bglInfStatusItem.hide();
+            return;
+        }
+        // Cheap content scan — same shape as the LSP server's findBglRegions.
+        // We only need a yes/no, so we can stop at the first match.
+        const text = editor.document.getText();
+        if (/(^|[^a-zA-Z0-9_])#bgl(\s*\{|\s+[^\n])/m.test(text)) {
+            bglInfStatusItem.show();
+        } else {
+            bglInfStatusItem.hide();
+        }
+    };
+
+    context.subscriptions.push(
+        vscode.window.onDidChangeActiveTextEditor(updateBglInfStatus)
+    );
+    context.subscriptions.push(
+        vscode.workspace.onDidChangeTextDocument((e) => {
+            if (vscode.window.activeTextEditor?.document === e.document) {
+                updateBglInfStatus(vscode.window.activeTextEditor);
+            }
+        })
+    );
+    updateBglInfStatus(vscode.window.activeTextEditor);
+
     // ── Beguile: Play ─────────────────────────────────────────────────────────
     const playCommand = vscode.commands.registerCommand('beguile.play', async () => {
         const editor = vscode.window.activeTextEditor;
-        if (!editor || editor.document.languageId !== 'beguile') {
-            vscode.window.showErrorMessage('Open a .bgl file to play.');
+        const langId = editor?.document.languageId;
+        if (!editor || (langId !== 'beguile' && langId !== 'inform6')) {
+            vscode.window.showErrorMessage('Open a .bgl or .inf file to play.');
             return;
         }
         const bglPath = editor.document.uri.fsPath;
         const { bin, args } = beguilerCommand();
 
-        // Compile the file with beguiler (no --debug for plain play)
+        // Compile the file with beguiler (no --debug for plain play).
+        // Use spawn (not exec) so stdout/stderr chunks interleave in the output channel
+        // in their real chronological order instead of being split into two post-facto blobs.
         outputChannel.clear();
         outputChannel.show(true);
         await vscode.window.withProgress(
             { location: vscode.ProgressLocation.Notification, title: `Compiling ${path.basename(bglPath)}…`, cancellable: false },
             () => new Promise<void>((resolve, reject) => {
-                cp.exec(`"${bin}" ${args} "${bglPath}"`, (err, stdout, stderr) => {
-                    outputChannel.append(stdout);
-                    if (stderr) outputChannel.append(stderr);
-                    if (err) {
+                const child = cp.spawn(`"${bin}" ${args} "${bglPath}"`, { shell: true });
+                child.stdout.on('data', (chunk: Buffer) => outputChannel.append(chunk.toString()));
+                child.stderr.on('data', (chunk: Buffer) => outputChannel.append(chunk.toString()));
+                child.on('close', (code) => {
+                    if (code !== 0) {
                         vscode.window.showErrorMessage('beguiler failed — see Beguile output panel for details.');
-                        reject(err);
+                        reject(new Error(`beguiler exited with code ${code}`));
                     } else {
                         resolve();
                     }
+                });
+                child.on('error', (err) => {
+                    vscode.window.showErrorMessage('beguiler failed to start — see Beguile output panel for details.');
+                    reject(err);
                 });
             })
         ).then(undefined, () => { /* error already shown */ return; });
@@ -130,7 +173,7 @@ export function activate(context: vscode.ExtensionContext) {
         // Locate the story file (beguiler writes it into output/ by default, or alongside source)
         // We re-derive the same path logic: check <bglDir>/output/<stem>.ulx, .z5 etc.
         const bglDir = path.dirname(bglPath);
-        const stem = path.basename(bglPath, '.bgl');
+        const stem = path.basename(bglPath, path.extname(bglPath));
         const candidates = [
             path.join(bglDir, 'output', stem + '.gblorb'),
             path.join(bglDir, 'output', stem + '.ulx'),
@@ -157,30 +200,38 @@ export function activate(context: vscode.ExtensionContext) {
     // ── Beguile: Debug ────────────────────────────────────────────────────────
     const debugCommand = vscode.commands.registerCommand('beguile.debug', async () => {
         const editor = vscode.window.activeTextEditor;
-        if (!editor || editor.document.languageId !== 'beguile') {
-            vscode.window.showErrorMessage('Open a .bgl file to debug.');
+        const langId = editor?.document.languageId;
+        if (!editor || (langId !== 'beguile' && langId !== 'inform6')) {
+            vscode.window.showErrorMessage('Open a .bgl or .inf file to debug.');
             return;
         }
         const bglPath = editor.document.uri.fsPath;
         const { bin, args } = beguilerCommand(true);
 
-        // Compile with --debug
+        // Compile with --debug. Same spawn-based streaming as the play path so output
+        // stays chronologically ordered.
         outputChannel.clear();
         outputChannel.show(true);
         let compiledOk = true;
         await vscode.window.withProgress(
             { location: vscode.ProgressLocation.Notification, title: `Compiling (debug) ${path.basename(bglPath)}…`, cancellable: false },
             () => new Promise<void>((resolve, reject) => {
-                cp.exec(`"${bin}" --debug ${args} "${bglPath}"`, { cwd: path.dirname(bglPath) }, (err, stdout, stderr) => {
-                    outputChannel.append(stdout);
-                    if (stderr) outputChannel.append(stderr);
-                    if (err) {
+                const child = cp.spawn(`"${bin}" --debug ${args} "${bglPath}"`, { cwd: path.dirname(bglPath), shell: true });
+                child.stdout.on('data', (chunk: Buffer) => outputChannel.append(chunk.toString()));
+                child.stderr.on('data', (chunk: Buffer) => outputChannel.append(chunk.toString()));
+                child.on('close', (code) => {
+                    if (code !== 0) {
                         vscode.window.showErrorMessage('beguiler failed — see Beguile output panel for details.');
                         compiledOk = false;
-                        reject(err);
+                        reject(new Error(`beguiler exited with code ${code}`));
                     } else {
                         resolve();
                     }
+                });
+                child.on('error', (err) => {
+                    vscode.window.showErrorMessage('beguiler failed to start — see Beguile output panel for details.');
+                    compiledOk = false;
+                    reject(err);
                 });
             })
         ).then(undefined, () => { compiledOk = false; });
@@ -188,7 +239,7 @@ export function activate(context: vscode.ExtensionContext) {
 
         // Locate story file
         const bglDir = path.dirname(bglPath);
-        const stem   = path.basename(bglPath, '.bgl');
+        const stem   = path.basename(bglPath, path.extname(bglPath));
         const candidates = [
             path.join(bglDir, 'output', stem + '.gblorb'),
             path.join(bglDir, 'output', stem + '.ulx'),
@@ -242,7 +293,10 @@ export function activate(context: vscode.ExtensionContext) {
     };
     const traceChannel = vscode.window.createOutputChannel('Beguile LSP Trace');
     const clientOptions: LanguageClientOptions = {
-        documentSelector: [{ scheme: 'file', language: 'beguile' }],
+        documentSelector: [
+            { scheme: 'file', language: 'beguile' },
+            { scheme: 'file', language: 'inform6' },
+        ],
         outputChannel,
         traceOutputChannel: traceChannel,
     };

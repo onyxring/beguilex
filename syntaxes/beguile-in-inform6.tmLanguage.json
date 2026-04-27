@@ -1,0 +1,42 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Beguile in Inform 6",
+  "scopeName": "beguile.injection.inform6",
+  "injectionSelector": "L:source.inform6",
+  "patterns": [
+    { "include": "#bgl-multi-line" },
+    { "include": "#bgl-single-line" }
+  ],
+  "repository": {
+    "bgl-multi-line": {
+      "comment": "Multi-line #bgl{ ... } region in .inf files. Indentation back-reference (\\1) ensures the closing } matches the opener's indent level, so nested { } inside Beguile statements don't terminate the region prematurely.",
+      "name": "meta.embedded.block.bgl.inform6",
+      "begin": "^(\\s*)(#bgl)\\s*(\\{)[^\\n}]*$",
+      "end": "^\\1(\\})",
+      "beginCaptures": {
+        "2": { "name": "keyword.control.directive.beguile" },
+        "3": { "name": "punctuation.section.embedded.begin.beguile" }
+      },
+      "endCaptures": {
+        "1": { "name": "punctuation.section.embedded.end.beguile" }
+      },
+      "contentName": "meta.embedded.block.bgl.inform6 source.beguile",
+      "patterns": [
+        { "include": "source.beguile" }
+      ]
+    },
+    "bgl-single-line": {
+      "comment": "Single-line #bgl <statement>; region in .inf files. Captures the rest of the line and re-applies Beguile patterns to it.",
+      "match": "(#bgl)\\s+([^\\n]*)$",
+      "captures": {
+        "1": { "name": "keyword.control.directive.beguile" },
+        "2": {
+          "name": "meta.embedded.line.bgl.inform6 source.beguile",
+          "patterns": [
+            { "include": "source.beguile" }
+          ]
+        }
+      }
+    }
+  }
+}

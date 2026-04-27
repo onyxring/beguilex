@@ -49,6 +49,17 @@
           "meta.embedded.block.i6.beguile": "inform6",
           "meta.embedded.emitter.i6.beguile": "inform6"
         }
+      },
+      {
+        "scopeName": "beguile.injection.inform6",
+        "path": "./syntaxes/beguile-in-inform6.tmLanguage.json",
+        "injectTo": [
+          "source.inform6"
+        ],
+        "embeddedLanguages": {
+          "meta.embedded.block.bgl.inform6": "beguile",
+          "meta.embedded.line.bgl.inform6": "beguile"
+        }
       }
     ],
     "configuration": [
