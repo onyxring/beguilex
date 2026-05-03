@@ -32,7 +32,7 @@ Compile and play .bgl games directly in VS Code using an embedded interpreter pa
 Download the latest `.vsix` from [Releases](https://github.com/onyxring/beguilex/releases), then:
 
 ```sh
-code --install-extension beguilex-0.1.0-preview.1.vsix
+code --install-extension beguile-language-0.1.0-preview.1.vsix
 ```
 
 Or in VS Code: **Extensions** view → `⋯` menu → **Install from VSIX...**
