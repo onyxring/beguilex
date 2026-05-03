@@ -5,6 +5,10 @@
 
 Editor support, integrated build, and a full debugger for [Beguile](https://github.com/onyxring/beguile) — an Interactive Fiction language that compiles via Inform 6 to the Glulx and Z-machine platforms.
 
+## Status: Preview
+
+This is an **experimental preview**. Expect breaking changes alongside compiler updates. Feedback and bug reports are welcome via [GitHub Issues](https://github.com/onyxring/beguilex/issues).
+
 ## Editor
 
 - Syntax and semantic highlighting
@@ -23,10 +27,29 @@ Compile and play .bgl games directly in VS Code using an embedded interpreter pa
 - Locals, globals, and self-property inspection with type-aware object expansion
 - Watch expressions, call stack, and runtime variable editing
 
+## Install
+
+Download the latest `.vsix` from [Releases](https://github.com/onyxring/beguilex/releases), then:
+
+```sh
+code --install-extension beguilex-0.1.0-preview.1.vsix
+```
+
+Or in VS Code: **Extensions** view → `⋯` menu → **Install from VSIX...**
+
 ## Requirements
 
-- [beguiler](https://github.com/onyxring/beguile) — the Beguile-to-Inform 6 transpiler
+- [beguiler](https://github.com/onyxring/beguile) — the Beguile-to-Inform 6 transpiler. Download a binary from its [Releases](https://github.com/onyxring/beguile/releases) and ensure it's on your `PATH` (or configure the path in extension settings).
 - Inform 6 compiler (invoked automatically by beguiler)
 
+## Build from source
 
-[def]: image
+```sh
+npm install
+npm run compile
+npx vsce package
+```
+
+## License
+
+MIT — see [LICENSE](LICENSE).
