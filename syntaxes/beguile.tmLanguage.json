@@ -206,7 +206,7 @@
     },
 
     "emitter-vars": {
-      "comment": "Substitution placeholders inside emitter bodies: $self, $prop, $counter, $element, $array, or any $identifier",
+      "comment": "Substitution placeholders inside emitter bodies: $self, $prop, $target, $class, $counter, $element, $array, or any $identifier (incl. $<paramname>)",
       "name": "variable.language.self.beguile",
       "match": "\\$[a-zA-Z_][a-zA-Z0-9_]*"
     },
@@ -282,7 +282,7 @@
 
     "keywords-control": {
       "name": "keyword.control.beguile",
-      "match": "\\b(if|else|for|while|do|switch|case|break|continue|return|rtrue|rfalse|in|to|try|catch|throw)\\b"
+      "match": "\\b(if|else|for|while|do|switch|case|break|continue|return|rtrue|rfalse|in|to|try|catch|throw|new|delete)\\b"
     },
 
     "keywords-declaration": {

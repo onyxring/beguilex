@@ -184,7 +184,12 @@ export class BeguileDebugAdapter implements vscode.DebugAdapter {
                 const bps = (message.arguments?.breakpoints ?? []) as Array<{ line: number }>;
 
                 dbgLog(`setBreakpoints: src=${src} bps=${JSON.stringify(bps.map(b=>b.line))} hasDebugInfo=${!!this.debugInfo}`);
-                if (this.debugInfo && src.endsWith('.bgl')) {
+                // Route by .bgldbg map membership rather than file extension. A .inf
+                // file in .inf-as-input mode appears in the map's bglFile column the
+                // same way a .bgl file does, so both go through the bgl→VM lookup.
+                // Pure I6 sources (the transpiled .inf, parser.h, verblib.h, etc.)
+                // fall through to the I6 line→VM lookup.
+                if (this.debugInfo && this.debugInfo.isBglSource(src)) {
                     const verified: Array<{ verified: boolean; line: number; message?: string }> = [];
                     const addrs = new Set<number>();
 
@@ -202,8 +207,8 @@ export class BeguileDebugAdapter implements vscode.DebugAdapter {
                     dbgLog(`  → updateBreakpoints with ${addrs.size} addrs`);
                     this.panel?.updateBreakpoints(src, addrs);
                     this.respond(message, { breakpoints: verified });
-                } else if (this.debugInfo && !src.endsWith('.bgl')) {
-                    // I6 source breakpoints — map I6 line → VM addresses via addrToInf
+                } else if (this.debugInfo) {
+                    // Pure I6 source breakpoints — map I6 line → VM addresses via addrToInf
                     const verified: Array<{ verified: boolean; line: number; message?: string }> = [];
                     const addrs = new Set<number>();
 

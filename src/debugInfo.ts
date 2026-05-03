@@ -579,6 +579,22 @@ export class DebugInfo {
         return Array.from(files).sort();
     }
 
+    /**
+     * True when `filePath` appears as a source file in the [map] section of the
+     * .bgldbg bundle. Includes both .bgl files (normal Beguile mode) and .inf
+     * files when the original .inf is the source (i.e. .inf-as-input mode).
+     * Used by the debug adapter to route setBreakpoints through the bgl→VM map
+     * rather than the I6 line→VM map for any source that has Beguile-derived
+     * code, regardless of file extension.
+     */
+    isBglSource(filePath: string): boolean {
+        const norm = path.resolve(filePath);
+        for (const loc of this.infToBgl.values()) {
+            if (loc.file === norm) return true;
+        }
+        return false;
+    }
+
     /** All unique .inf source files referenced in the debug map (by file-index). */
     allInfSourceFiles(): string[] {
         const used = new Set<number>();

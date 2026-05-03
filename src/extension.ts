@@ -98,12 +98,13 @@ export function activate(context: vscode.ExtensionContext) {
         vscode.commands.registerCommand('beguile.openBglSource', openBglSourceCommand)
     );
 
-    // ── Status bar: "Beguile-augmented .inf" indicator ────────────────────────
+    // ── Status bar: precompiler-mode indicator ───────────────────────────────
     // Lights up when the active editor is a .inf file containing one or more
-    // #bgl regions. Helps discoverability for users opening unfamiliar mixed-mode files.
+    // Beguile islands (#bgl, #bglDecl, #bglStmt). Helps discoverability for
+    // users opening unfamiliar precompiler-mode files.
     const bglInfStatusItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 50);
-    bglInfStatusItem.text = '$(beaker) Beguile-augmented .inf';
-    bglInfStatusItem.tooltip = 'This .inf file contains #bgl{} blocks — Beguile completion/hover/definition work inside them.';
+    bglInfStatusItem.text = '$(beaker) Beguile precompiler mode';
+    bglInfStatusItem.tooltip = 'This .inf file contains Beguile islands (#bgl, #bglDecl, or #bglStmt) — Beguile completion/hover/definition work inside them.';
     context.subscriptions.push(bglInfStatusItem);
 
     const updateBglInfStatus = (editor: vscode.TextEditor | undefined) => {
@@ -113,8 +114,9 @@ export function activate(context: vscode.ExtensionContext) {
         }
         // Cheap content scan — same shape as the LSP server's findBglRegions.
         // We only need a yes/no, so we can stop at the first match.
+        // Matches #bgl, #bglDecl, or #bglStmt followed by '{' or a single-line statement form.
         const text = editor.document.getText();
-        if (/(^|[^a-zA-Z0-9_])#bgl(\s*\{|\s+[^\n])/m.test(text)) {
+        if (/(^|[^a-zA-Z0-9_])#bgl(?:Decl|Stmt)?(\s*\{|\s+[^\n])/m.test(text)) {
             bglInfStatusItem.show();
         } else {
             bglInfStatusItem.hide();
@@ -152,7 +154,9 @@ export function activate(context: vscode.ExtensionContext) {
         await vscode.window.withProgress(
             { location: vscode.ProgressLocation.Notification, title: `Compiling ${path.basename(bglPath)}…`, cancellable: false },
             () => new Promise<void>((resolve, reject) => {
-                const child = cp.spawn(`"${bin}" ${args} "${bglPath}"`, { shell: true });
+                const cmd = `"${bin}" ${args} "${bglPath}"`;
+                outputChannel.appendLine(`> ${cmd}`);
+                const child = cp.spawn(cmd, { shell: true });
                 child.stdout.on('data', (chunk: Buffer) => outputChannel.append(chunk.toString()));
                 child.stderr.on('data', (chunk: Buffer) => outputChannel.append(chunk.toString()));
                 child.on('close', (code) => {
@@ -216,7 +220,10 @@ export function activate(context: vscode.ExtensionContext) {
         await vscode.window.withProgress(
             { location: vscode.ProgressLocation.Notification, title: `Compiling (debug) ${path.basename(bglPath)}…`, cancellable: false },
             () => new Promise<void>((resolve, reject) => {
-                const child = cp.spawn(`"${bin}" --debug ${args} "${bglPath}"`, { cwd: path.dirname(bglPath), shell: true });
+                const cwd = path.dirname(bglPath);
+                const cmd = `"${bin}" --debug ${args} "${bglPath}"`;
+                outputChannel.appendLine(`> (cwd: ${cwd}) ${cmd}`);
+                const child = cp.spawn(cmd, { cwd, shell: true });
                 child.stdout.on('data', (chunk: Buffer) => outputChannel.append(chunk.toString()));
                 child.stderr.on('data', (chunk: Buffer) => outputChannel.append(chunk.toString()));
                 child.on('close', (code) => {
