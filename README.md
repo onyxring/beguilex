@@ -3,7 +3,7 @@
 
 ![Beguile](images/beguileLogo.png)
 
-Editor support, integrated build, and a full debugger for [Beguile](https://github.com/onyxring/beguile) — an Interactive Fiction language that compiles via Inform 6 to the Glulx and Z-machine platforms.
+Editor support, integrated build, and a full debugger for [Beguile](https://github.com/onyxring/beguiler) — an Interactive Fiction language that compiles via Inform 6 to the Glulx and Z-machine platforms.
 
 ## Status: Preview
 
@@ -39,7 +39,7 @@ Or in VS Code: **Extensions** view → `⋯` menu → **Install from VSIX...**
 
 ## Requirements
 
-- [beguiler](https://github.com/onyxring/beguile) — the Beguile-to-Inform 6 transpiler. Download a binary from its [Releases](https://github.com/onyxring/beguile/releases) and ensure it's on your `PATH` (or configure the path in extension settings).
+- [beguiler](https://github.com/onyxring/beguiler) — the Beguile-to-Inform 6 transpiler. Download a binary from its [Releases](https://github.com/onyxring/beguiler/releases) and ensure it's on your `PATH` (or configure the path in extension settings).
 - Inform 6 compiler (invoked automatically by beguiler)
 
 ## Build from source
