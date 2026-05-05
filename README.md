@@ -1,13 +1,18 @@
 # Beguilex — Beguile Language Extension for VS Code
 
-
 ![Beguile](images/beguileLogo.png)
 
-Editor support, integrated build, and a full debugger for [Beguile](https://github.com/onyxring/beguiler) — an Interactive Fiction language that compiles via Inform 6 to the Glulx and Z-machine platforms.
+First some context:
+
+***Beguile*** is a clean, type-aware language inspired by C++, C#, and TypeScript.  You can use it to create Z-Machine and Glulx story files.
+
+***Beguiler*** is the *Beguile compiler* which you can find in the [Beguiler repo](https://github.com/onyxring/beguiler).  It transpiles *Beguile* source into I6 and instruments the [Inform 6](https://github.com/DavidKinder/Inform6) compiler. Install it for this extension to make use of.
+
+***Beguilex*** is the *Beguile extension* for VS Code.  It provides syntax highlighting, diagnostics, hover, completion, embedded interpreters, run-time debugging support, and instruments the [Inform 6](https://github.com/DavidKinder/Inform6) compiler.  Without Beguiler, this extension has limited use.
 
 ## Status: Preview
 
-This is an **experimental preview**. Expect breaking changes alongside compiler updates. Feedback and bug reports are welcome via [GitHub Issues](https://github.com/onyxring/beguilex/issues).
+This is an experimental preview. The language and compiler are evolving rapidly and this extension will change as a result. Feedback and bug reports are welcome via [GitHub Issues](https://github.com/onyxring/beguilex/issues).
 
 ## Editor
 
@@ -39,17 +44,25 @@ Or in VS Code: **Extensions** view → `⋯` menu → **Install from VSIX...**
 
 ## Requirements
 
-- [beguiler](https://github.com/onyxring/beguiler) — the Beguile-to-Inform 6 transpiler. Download a binary from its [Releases](https://github.com/onyxring/beguiler/releases) and ensure it's on your `PATH` (or configure the path in extension settings).
-- Inform 6 compiler (invoked automatically by beguiler)
+- [beguiler](https://github.com/onyxring/beguiler) — the Beguile-to-Inform 6 transpiler. Download a binary from its [Releases](https://github.com/onyxring/beguiler/releases) and configure the path in extension settings (or ensure it's on your `PATH`).
+- Inform 6 compiler [Inform 6](https://github.com/DavidKinder/Inform6) (invoked automatically by beguiler)
 
 ## Build from source
 
 ```sh
-npm install
+npm ci
 npm run compile
 npx vsce package
 ```
 
+## Makes use of...
+
+Beguilex uses the two node_modules for [quixe](https://github.com/choas/quixejs) and [ifvms](https://github.com/curiousdannii/ifvms.js).  These are javascript interpreters for Z-machine and Glulx games. 
+
 ## License
 
 MIT — see [LICENSE](LICENSE).
+
+## Use of AI
+
+I've been writing code for nearly 50 years (since my TRS-80 model I), but this AI-assisted coding thing is new (as I write this) and I wanted to explore it.  Beguile - including the compiler (Beguiler) and the extension (Beguilex) - is my first exploration into what Claude Code is capable of.  I used it to different degrees with each project.
