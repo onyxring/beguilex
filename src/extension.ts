@@ -39,24 +39,9 @@ function beguilerCommand(isDebug: boolean = false): { bin: string; args: string 
         }
     }
 
-    // Only pass -lib=<path> if the user has explicitly customized the setting.
-    // The package.json default is "beguiLib", but the compiler's default is the
-    // absolute "<binary_dir>/beguiLib" — passing "beguiLib" verbatim would
-    // re-anchor it cwd-relative and break out-of-the-box behavior. Use inspect()
-    // to detect "user explicitly set this" vs "still on the default."
-    const libInspect = bCfg.inspect<string>('libraryPath');
-    const libCustomized = !!libInspect && (
-        libInspect.globalValue !== undefined ||
-        libInspect.workspaceValue !== undefined ||
-        libInspect.workspaceFolderValue !== undefined
-    );
-    if (libCustomized) {
-        const libraryPath: string = bCfg.get('libraryPath') || '';
-        if (libraryPath) {
-            const wsBase = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? '';
-            const resolved = path.isAbsolute(libraryPath) ? libraryPath : path.join(wsBase, libraryPath);
-            parts.push(`-lib="${resolved}"`);
-        }
+    const libraryPath: string = bCfg.get('libraryPath') || '';
+    if (libraryPath) {
+        parts.push(`-lib="${libraryPath}"`);
     }
 
     const extraBeguiler: string = bCfg.get('extraArgs') || '';

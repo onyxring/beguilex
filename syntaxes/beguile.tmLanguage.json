@@ -50,9 +50,9 @@
     },
 
     "i6-block": {
-      "comment": "Raw Inform 6 block: #i6 { ... }. Captures leading whitespace in group 1 so the end pattern can require the closing } at the same indentation level, regardless of column position.",
+      "comment": "Raw Inform 6 block: #i6 { ... }. Captures leading whitespace in group 1 so the end pattern can require the closing } at the same indentation level, regardless of column position. Case-insensitive — Beguile lexer is case-insensitive.",
       "name": "meta.embedded.block.i6.beguile",
-      "begin": "^(\\s*)#i6\\s*\\{",
+      "begin": "(?i)^(\\s*)#i6\\s*\\{",
       "end": "^\\1\\}",
       "beginCaptures": {
         "0": { "name": "keyword.control.directive.beguile" }
@@ -67,8 +67,8 @@
     },
 
     "i6-line": {
-      "comment": "Single-line #i6 directive: #i6 i6code (no braces — parser reads to end of line). Negative lookahead ensures the block form #i6 { is handled by i6-block instead.",
-      "match": "(#i6)\\s+(?!\\{)([^\\n]*)",
+      "comment": "Single-line #i6 directive: #i6 i6code (no braces — parser reads to end of line). Negative lookahead ensures the block form #i6 { is handled by i6-block instead. Case-insensitive.",
+      "match": "(?i)(#i6)\\s+(?!\\{)([^\\n]*)",
       "captures": {
         "1": { "name": "keyword.control.directive.beguile" },
         "2": {
@@ -80,8 +80,8 @@
     },
 
     "emitter-body-single": {
-      "comment": "Single-line emitter body: emitter TYPE NAME(params) { i6expr }. Must match before multi-line rule.",
-      "match": "\\bemitter\\b([^{\\n]*)\\{([^\\n}]*)\\}",
+      "comment": "Single-line emitter body: emitter TYPE NAME(params) { i6expr }. Must match before multi-line rule. Case-insensitive.",
+      "match": "(?i)\\bemitter\\b([^{\\n]*)\\{([^\\n}]*)\\}",
       "captures": {
         "1": {
           "patterns": [
@@ -99,8 +99,8 @@
     },
 
     "emitter-body-multi": {
-      "comment": "Multi-line emitter body. Indentation back-reference ensures } matches opener's indent level.",
-      "begin": "^(\\s*)\\bemitter\\b[^\\n]*\\{[^\\n}]*$",
+      "comment": "Multi-line emitter body. Indentation back-reference ensures } matches opener's indent level. Case-insensitive.",
+      "begin": "(?i)^(\\s*)\\bemitter\\b[^\\n]*\\{[^\\n}]*$",
       "end": "^\\1\\}",
       "beginCaptures": {
         "0": {
@@ -212,11 +212,12 @@
     },
 
     "preprocessor": {
+      "comment": "All preprocessor directive matches are case-insensitive (Beguile lexer is case-insensitive — see project_beguile_case_insensitive memory).",
       "patterns": [
         {
-          "comment": "#include <system> or #include \"path\"",
+          "comment": "#include <system> or #include \"path\" (case-insensitive)",
           "name": "meta.preprocessor.include.beguile",
-          "match": "(#include(?:I6)?)\\s*(?:(<[^>]*>)|(\"[^\"]*\"))",
+          "match": "(?i)(#include(?:I6)?)\\s*(?:(<[^>]*>)|(\"[^\"]*\"))",
           "captures": {
             "1": { "name": "keyword.control.directive.include.beguile" },
             "2": { "name": "string.quoted.other.lt-gt.beguile" },
@@ -224,48 +225,48 @@
           }
         },
         {
-          "comment": "#define NAME — value portion is left unscoped so the main grammar colors numbers/strings/identifiers naturally (matches C/C++/C# behavior).",
+          "comment": "#define NAME — value portion is left unscoped so the main grammar colors numbers/strings/identifiers naturally (matches C/C++/C# behavior). Case-insensitive.",
           "name": "meta.preprocessor.define.beguile",
-          "match": "(#define)\\s+([a-zA-Z_][a-zA-Z0-9_]*)",
+          "match": "(?i)(#define)\\s+([a-zA-Z_][a-zA-Z0-9_]*)",
           "captures": {
             "1": { "name": "keyword.control.directive.define.beguile" },
             "2": { "name": "entity.name.constant.beguile" }
           }
         },
         {
-          "comment": "#if / #elif / #else / #endif conditional compilation — condition expression is left unscoped so the main grammar colors identifiers naturally (matches C/C++/C# behavior).",
+          "comment": "#if / #elif / #else / #endif conditional compilation — condition expression is left unscoped so the main grammar colors identifiers naturally (matches C/C++/C# behavior). Case-insensitive.",
           "name": "meta.preprocessor.conditional.beguile",
-          "match": "(#(?:if|elif|else|endif))\\b",
+          "match": "(?i)(#(?:if|elif|else|endif))\\b",
           "captures": {
             "1": { "name": "keyword.control.directive.conditional.beguile" }
           }
         },
         {
-          "comment": "#once file guard",
+          "comment": "#once file guard (case-insensitive).",
           "name": "keyword.control.directive.beguile",
-          "match": "#once\\b"
+          "match": "(?i)#once\\b"
         },
         {
-          "comment": "#message, #warning, #error, #exit, #using directives",
+          "comment": "#message, #warning, #error, #exit, #using directives (case-insensitive).",
           "name": "keyword.control.directive.beguile",
-          "match": "#(?:message|warning|error|exit|using)\\b"
+          "match": "(?i)#(?:message|warning|error|exit|using)\\b"
         },
         {
-          "comment": "#beguilerSettings block header or property reference (#beguilerSettings.propName)",
+          "comment": "#beguilerSettings block header or property reference (#beguilerSettings.propName). Case-insensitive.",
           "name": "keyword.control.directive.beguile",
-          "match": "#beguilerSettings\\b(?:\\.[a-zA-Z_][a-zA-Z0-9_]*)?"
+          "match": "(?i)#beguilerSettings\\b(?:\\.[a-zA-Z_][a-zA-Z0-9_]*)?"
         },
         {
-          "comment": "#startup, #emitfirst, #emitlast directives",
+          "comment": "#startup, #emitfirst, #emitlast directives (case-insensitive).",
           "name": "keyword.control.directive.beguile",
-          "match": "#(?:startup|emitfirst|emitlast)\\b"
+          "match": "(?i)#(?:startup|emitfirst|emitlast)\\b"
         }
       ]
     },
 
     "grammar-token-calls": {
-      "comment": "Parameterized grammar tokens: NOUN(Routine) and SCOPE(Routine)",
-      "match": "\\b(NOUN|SCOPE)\\s*(\\()([a-zA-Z_][a-zA-Z0-9_]*)(\\))",
+      "comment": "Parameterized grammar tokens: NOUN(Routine) and SCOPE(Routine). Case-insensitive (Beguile lexer is case-insensitive — see project_beguile_case_insensitive memory).",
+      "match": "(?i)\\b(NOUN|SCOPE)\\s*(\\()([a-zA-Z_][a-zA-Z0-9_]*)(\\))",
       "captures": {
         "1": { "name": "support.constant.grammar-token.beguile" },
         "2": { "name": "punctuation.beguile" },
@@ -275,39 +276,45 @@
     },
 
     "grammar-tokens": {
-      "comment": "Built-in grammar pattern tokens (bare, non-parameterized)",
+      "comment": "Built-in grammar pattern tokens (bare, non-parameterized). Case-insensitive.",
       "name": "support.constant.grammar-token.beguile",
-      "match": "\\b(ANYNUMBER|HELD|TOPIC|MULTI|MULTIHELD|MULTIEXCEPT|MULTIINSIDE|MULTIFIRST)\\b"
+      "match": "(?i)\\b(ANYNUMBER|HELD|TOPIC|MULTI|MULTIHELD|MULTIEXCEPT|MULTIINSIDE|MULTIFIRST)\\b"
     },
 
     "keywords-control": {
+      "comment": "Case-insensitive — Beguile lexer lowercases all identifiers (see project_beguile_case_insensitive memory).",
       "name": "keyword.control.beguile",
-      "match": "\\b(if|else|for|while|do|switch|case|break|continue|return|rtrue|rfalse|in|to|try|catch|throw|new|delete)\\b"
+      "match": "(?i)\\b(if|else|for|while|do|switch|case|break|continue|return|rtrue|rfalse|in|to|try|catch|throw|new|delete)\\b"
     },
 
     "keywords-declaration": {
+      "comment": "Case-insensitive.",
       "name": "storage.modifier.beguile",
-      "match": "\\b(extern|extend|emitter|replace|const|alias|readonly|static|explicit|default)\\b"
+      "match": "(?i)\\b(extern|extend|emitter|replace|const|alias|readonly|static|explicit|default)\\b"
     },
 
     "keywords-type-declaration": {
+      "comment": "Case-insensitive — `class` / `Class` / `CLASS` all match.",
       "name": "storage.type.beguile",
-      "match": "\\b(class|object|enum|bnum|verb|grammar|attribute|grammarElement|grammarPattern|grammarRule|grammarRuleList)\\b"
+      "match": "(?i)\\b(class|object|enum|bnum|verb|grammar|attribute|grammarElement|grammarPattern|grammarRule|grammarRuleList)\\b"
     },
 
     "keywords-type-primitive": {
+      "comment": "Case-insensitive.",
       "name": "storage.type.primitive.beguile",
-      "match": "\\b(int|uint|bool|string|char|void|var|array|func|eBool|dictionaryWord)\\b"
+      "match": "(?i)\\b(int|uint|bool|string|char|void|var|array|func|eBool|dictionaryWord)\\b"
     },
 
     "constants-language": {
+      "comment": "Case-insensitive.",
       "name": "constant.language.beguile",
-      "match": "\\b(true|false|null|selfobj|nothing|thedark|replaced)\\b"
+      "match": "(?i)\\b(true|false|null|selfobj|nothing|thedark|replaced)\\b"
     },
 
     "keyword-self": {
+      "comment": "Case-insensitive — `self` / `Self` / `SELF` all match.",
       "name": "variable.language.self.beguile",
-      "match": "\\bself\\b"
+      "match": "(?i)\\bself\\b"
     },
 
     "function-definition": {

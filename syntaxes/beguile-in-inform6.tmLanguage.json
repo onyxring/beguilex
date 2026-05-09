@@ -11,7 +11,7 @@
     "bgl-multi-line": {
       "comment": "Multi-line #bgl{ ... }, #bglDecl{ ... }, or #bglStmt{ ... } region in .inf files. The bare #bgl form covers both in-routine Beguile islands (§15.6) and file-scope precompiler-mode islands (§15.6b). #bglDecl and #bglStmt are file-scope-only escape hatches in precompiler mode that force declaration-only or statement-only parsing. Indentation back-reference (\\1) ensures the closing } matches the opener's indent level, so nested { } inside Beguile statements don't terminate the region prematurely.",
       "name": "meta.embedded.block.bgl.inform6",
-      "begin": "^(\\s*)(#bgl(?:Decl|Stmt)?)\\s*(\\{)[^\\n}]*$",
+      "begin": "(?i)^(\\s*)(#bgl(?:Decl|Stmt)?)\\s*(\\{)[^\\n}]*$",
       "end": "^\\1(\\})",
       "beginCaptures": {
         "2": { "name": "keyword.control.directive.beguile" },
@@ -27,7 +27,7 @@
     },
     "bgl-single-line": {
       "comment": "Single-line #bgl <statement>; region in .inf files (in-routine, terminated by newline). Captures the rest of the line and re-applies Beguile patterns to it. #bglDecl/#bglStmt have no single-line form.",
-      "match": "(#bgl)\\s+([^\\n]*)$",
+      "match": "(?i)(#bgl)\\s+([^\\n]*)$",
       "captures": {
         "1": { "name": "keyword.control.directive.beguile" },
         "2": {
