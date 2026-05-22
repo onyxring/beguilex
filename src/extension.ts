@@ -41,7 +41,11 @@ function beguilerCommand(isDebug: boolean = false): { bin: string; args: string 
 
     const libraryPath: string = bCfg.get('libraryPath') || '';
     if (libraryPath) {
-        parts.push(`-lib="${libraryPath}"`);
+        // No shell quoting — child_process.spawn passes args verbatim, so wrapping
+        // in literal "..." would propagate the quote characters into beguiler's argv
+        // and corrupt every libPath-derived file lookup. (Beguiler also defensively
+        // strips matching " or ' from -lib= values, but don't rely on that here.)
+        parts.push(`-lib=${libraryPath}`);
     }
 
     const extraBeguiler: string = bCfg.get('extraArgs') || '';
