@@ -55,7 +55,7 @@ const INCLUDE_RE = /^\s*#?include\s*(?:<([^>]+)>|"([^"]+)")/;
 const BEGUILE_KEYWORDS = new Set([
     // type declaration keywords
     'class', 'enum', 'bnum', 'verb', 'grammar', 'attribute',
-    'grammarElement', 'grammarPattern', 'grammarRule', 'grammarRuleList',
+    'patternElement', 'grammarRule', 'grammarRuleList',
     // declaration modifiers
     'extern', 'extend', 'emitter', 'replace', 'const', 'alias', 'readonly', 'static', 'explicit', 'default',
     // primitive types

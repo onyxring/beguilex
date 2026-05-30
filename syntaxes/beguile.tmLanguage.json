@@ -276,9 +276,9 @@
     },
 
     "grammar-tokens": {
-      "comment": "Built-in grammar pattern tokens (bare, non-parameterized). Case-insensitive.",
+      "comment": "Built-in grammar pattern tokens (bare, non-parameterized) — values of the grammarToken enum in beguiLib/bindings/i6StandardLibrary.bgl. `reverse` is the action-target modifier (must be last in a pattern). Case-insensitive. NOTE: this list must be kept in sync with the grammarToken enum; the LSP completion path (lspServer.cpp Phase 1.5) reads the enum directly and does not drift.",
       "name": "support.constant.grammar-token.beguile",
-      "match": "(?i)\\b(ANYNUMBER|HELD|TOPIC|MULTI|MULTIHELD|MULTIEXCEPT|MULTIINSIDE|MULTIFIRST)\\b"
+      "match": "(?i)\\b(noun|held|creature|topic|multi|multiheld|multiexcept|multiinside|special|anynumber|number|scope|reverse)\\b"
     },
 
     "keywords-control": {
@@ -290,13 +290,13 @@
     "keywords-declaration": {
       "comment": "Case-insensitive.",
       "name": "storage.modifier.beguile",
-      "match": "(?i)\\b(extern|extend|emitter|replace|const|alias|readonly|static|explicit|default)\\b"
+      "match": "(?i)\\b(byVal|extern|extend|emitter|replace|const|alias|ref|readonly|static|explicit|default)\\b"
     },
 
     "keywords-type-declaration": {
       "comment": "Case-insensitive — `class` / `Class` / `CLASS` all match.",
       "name": "storage.type.beguile",
-      "match": "(?i)\\b(class|object|enum|bnum|verb|grammar|attribute|grammarElement|grammarPattern|grammarRule|grammarRuleList)\\b"
+      "match": "(?i)\\b(class|object|enum|bnum|verb|grammar|attribute|patternElement|grammarRule|grammarRuleList)\\b"
     },
 
     "keywords-type-primitive": {
