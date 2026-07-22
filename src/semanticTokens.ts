@@ -54,12 +54,12 @@ const INCLUDE_RE = /^\s*#?include\s*(?:<([^>]+)>|"([^"]+)")/;
 // Grammar rules already color them; semantic tokens must not override that.
 const BEGUILE_KEYWORDS = new Set([
     // type declaration keywords
-    'class', 'enum', 'bnum', 'verb', 'grammar', 'attribute',
+    'class', 'object', 'enum', 'bnum', 'verb', 'grammar', 'attribute',
     'patternElement', 'grammarRule', 'grammarRuleList',
     // declaration modifiers
-    'extern', 'extend', 'emitter', 'replace', 'const', 'alias', 'readonly', 'static', 'explicit', 'default',
+    'extern', 'extend', 'emitter', 'replace', 'const', 'alias', 'byVal', 'ref', 'readonly', 'static', 'explicit', 'default',
     // primitive types
-    'int', 'bool', 'string', 'char', 'void', 'var', 'array', 'func', 'eBool', 'dictionaryWord',
+    'int', 'uint', 'bool', 'string', 'char', 'void', 'var', 'array', 'rawArray', 'func', 'eBool', 'dictionaryWord',
     // control flow
     'if', 'else', 'for', 'while', 'do', 'return', 'break', 'continue',
     'switch', 'case', 'default', 'to', 'try', 'catch', 'throw',

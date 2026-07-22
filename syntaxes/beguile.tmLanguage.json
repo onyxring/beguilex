@@ -5,6 +5,7 @@
   "fileTypes": ["bgl"],
   "patterns": [
     { "include": "#comments" },
+    { "include": "#i6-block-single" },
     { "include": "#i6-block" },
     { "include": "#i6-line" },
     { "include": "#emitter-body-single" },
@@ -49,10 +50,25 @@
       ]
     },
 
+    "i6-block-single": {
+      "comment": "Single-line I6 block: #i6 { i6code }. MUST be tried before the multi-line i6-block rule so an inline closing } isn't mistaken for the start of an unclosed block (which would swallow the rest of the file until an accidental same-indent }). Mirrors emitter-body-single vs emitter-body-multi. [^}\\n]* forbids nested braces + newlines, so a genuinely multi-line #i6 { falls through to i6-block. Case-insensitive.",
+      "match": "(?i)(#i6\\s*\\{)([^}\\n]*)(\\})",
+      "captures": {
+        "1": { "name": "keyword.control.directive.beguile" },
+        "2": {
+          "patterns": [
+            { "include": "#emitter-vars" },
+            { "include": "source.inform6" }
+          ]
+        },
+        "3": { "name": "keyword.control.directive.beguile" }
+      }
+    },
+
     "i6-block": {
-      "comment": "Raw Inform 6 block: #i6 { ... }. Captures leading whitespace in group 1 so the end pattern can require the closing } at the same indentation level, regardless of column position. Case-insensitive — Beguile lexer is case-insensitive.",
+      "comment": "Raw Inform 6 block: #i6 { ... } spanning multiple lines. The `\\{[^\\n}]*$` tail requires the opening brace to be the LAST significant thing on the line (no inline closing }), so an inline `#i6 { code }` does NOT match here and falls to i6-block-single instead. Without this guard `^(\\s*)#i6` starts at column 0 and out-competes i6-block-single (which starts at the #) on the earliest-match rule, reopening the swallow-to-EOF bug where the indent-anchored end `^\\1}` is never found. Mirrors emitter-body-multi. Captures leading whitespace in group 1 so the end pattern can require the closing } at the same indentation level. Case-insensitive — Beguile lexer is case-insensitive.",
       "name": "meta.embedded.block.i6.beguile",
-      "begin": "(?i)^(\\s*)#i6\\s*\\{",
+      "begin": "(?i)^(\\s*)#i6\\s*\\{[^\\n}]*$",
       "end": "^\\1\\}",
       "beginCaptures": {
         "0": { "name": "keyword.control.directive.beguile" }
@@ -234,6 +250,14 @@
           }
         },
         {
+          "comment": "I6-level compile-time conditionals: ##ifdef / ##ifndef / ##else / ##endif (and ##if inside emitter bodies). The `##` prefix marks a Beguile transpiler-evaluated conditional (bglParserDirectives.cpp). MUST precede the single-# conditional rule below: without it, `##endif`'s leading # is left unscoped and its inner `#endif` matches the single-# rule (leading # white, rest purple). Longer alternatives (ifdef/ifndef) listed before `if` so `if` can't shadow them. Case-insensitive.",
+          "name": "meta.preprocessor.conditional.beguile",
+          "match": "(?i)(##(?:ifdef|ifndef|else|endif|if))\\b",
+          "captures": {
+            "1": { "name": "keyword.control.directive.conditional.beguile" }
+          }
+        },
+        {
           "comment": "#if / #elif / #else / #endif conditional compilation — condition expression is left unscoped so the main grammar colors identifiers naturally (matches C/C++/C# behavior). Case-insensitive.",
           "name": "meta.preprocessor.conditional.beguile",
           "match": "(?i)(#(?:if|elif|else|endif))\\b",
@@ -302,7 +326,7 @@
     "keywords-type-primitive": {
       "comment": "Case-insensitive.",
       "name": "storage.type.primitive.beguile",
-      "match": "(?i)\\b(int|uint|bool|string|char|void|var|array|func|eBool|dictionaryWord)\\b"
+      "match": "(?i)\\b(int|uint|bool|string|char|void|var|array|rawArray|func|eBool|dictionaryWord)\\b"
     },
 
     "constants-language": {
