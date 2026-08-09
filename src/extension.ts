@@ -144,6 +144,42 @@ export function activate(context: vscode.ExtensionContext) {
     );
     updateBglInfStatus(vscode.window.activeTextEditor);
 
+    // Re-open include completion after a backspace inside an #include / #includeI6 directive.
+    // The LSP filters include candidates server-side (substring match) and returns isIncomplete,
+    // so VS Code re-queries as you type FORWARD — but on deletion it doesn't re-request, and once
+    // an over-typed path filters the list to empty (e.g. "gramt") the suggest widget closes, so
+    // backspacing back to a matching prefix ("gra") never reopens it. Detect a pure deletion whose
+    // cursor now sits inside an unclosed include delimiter and re-trigger suggestions.
+    context.subscriptions.push(
+        vscode.workspace.onDidChangeTextDocument((e) => {
+            const editor = vscode.window.activeTextEditor;
+            if (!editor || e.document !== editor.document) { return; }
+            const lang = e.document.languageId;
+            if (lang !== 'beguile' && lang !== 'inform6') { return; }
+            // Only react to a pure deletion: nothing inserted, a non-empty range removed.
+            const isDeletion = e.contentChanges.some(c => c.text.length === 0 && !c.range.isEmpty);
+            if (!isDeletion) { return; }
+            // Defer to a microtask: `editor.selection.active` isn't updated to the post-edit
+            // cursor yet inside onDidChangeTextDocument (selection changes fire separately), and
+            // VS Code needs a tick to finish processing the deletion — including its auto-closed
+            // quote bookkeeping, which is why the sync version missed the closing-quote case.
+            setTimeout(() => {
+                const ed = vscode.window.activeTextEditor;
+                if (!ed || ed.document !== e.document) { return; }
+                const pos = ed.selection.active;
+                const linePrefix = ed.document.lineAt(pos.line).text.substring(0, pos.character);
+                // Cursor inside an unclosed include/path delimiter — either:
+                //   `#include`/`#includeI6` <…> or "…"  (file/library completion), or
+                //   `includePaths = "…"` inside #beguilerSettings  (directory completion).
+                // Tolerates the optional `?`/`@` markers. `[^"<>]*$` = no closing delimiter before
+                // the cursor (a closing quote AFTER the cursor is fine — linePrefix stops there).
+                if (/(#include(i6)?\s*\??\s*@?\s*["<]|includepaths\s*=\s*")[^"<>]*$/i.test(linePrefix)) {
+                    void vscode.commands.executeCommand('editor.action.triggerSuggest');
+                }
+            }, 0);
+        })
+    );
+
     // ── Beguile: Play ─────────────────────────────────────────────────────────
     const playCommand = vscode.commands.registerCommand('beguile.play', async () => {
         const editor = vscode.window.activeTextEditor;
@@ -272,12 +308,26 @@ export function activate(context: vscode.ExtensionContext) {
             return;
         }
 
-        // Locate debug files
-        const infBase    = bglPath + '.transpiled.inf';
-        const bgldbgPath = bglPath + '.bgldbg';
-        const dbgPath    = infBase + '.dbg';
-        if (!fs.existsSync(bgldbgPath) || !fs.existsSync(dbgPath)) {
-            vscode.window.showErrorMessage('Debug files (.bgldbg / .dbg) not found — ensure beguiler compiled with --debug.');
+        // Locate debug files. beguiler emits the debug bundle alongside its other
+        // output: newer builds write it to the output folder (next to the story
+        // file), older builds wrote it next to the source. Search both locations
+        // (newest wins), then derive the transpiled .inf + .dbg from wherever the
+        // .bgldbg was found, so all three always come from the same build.
+        const bglBase  = path.basename(bglPath);          // e.g. "_unwelcomed.bgl"
+        const storyDir = path.dirname(storyPath);         // the actual output folder
+        const bgldbgPath = newestExisting([
+            path.join(storyDir, bglBase + '.bgldbg'),
+            path.join(bglDir,   bglBase + '.bgldbg'),
+        ]);
+        if (!bgldbgPath) {
+            vscode.window.showErrorMessage('Debug file (.bgldbg) not found — ensure beguiler compiled with --debug.');
+            return;
+        }
+        const dbgDir  = path.dirname(bgldbgPath);
+        const infBase = path.join(dbgDir, bglBase + '.transpiled.inf');
+        const dbgPath = infBase + '.dbg';
+        if (!fs.existsSync(dbgPath)) {
+            vscode.window.showErrorMessage('I6 debug file (.dbg) not found — ensure beguiler compiled with --debug.');
             return;
         }
 
