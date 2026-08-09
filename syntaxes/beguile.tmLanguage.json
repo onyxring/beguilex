@@ -18,6 +18,8 @@
     { "include": "#emitter-vars" },
     { "include": "#preprocessor" },
     { "include": "#grammar-token-calls" },
+    { "include": "#extend-body-single" },
+    { "include": "#extend-body" },
     { "include": "#keywords-control" },
     { "include": "#keywords-declaration" },
     { "include": "#keywords-type-declaration" },
@@ -284,7 +286,49 @@
           "comment": "#startup, #emitfirst, #emitlast directives (case-insensitive).",
           "name": "keyword.control.directive.beguile",
           "match": "(?i)#(?:startup|emitfirst|emitlast)\\b"
+        },
+        {
+          "comment": "#i6replace RoutineName [SavedName]; — emits I6 `Replace RoutineName [SavedName];` hoisted above all includes (spec §15.5.1). Unlike bare `#i6 replace X;` (raw-I6-to-EOL, handled by i6-line), this is a structured directive: the operands are ordinary I6 routine identifiers and the statement ends at `;`, so a trailing `// comment` is a genuine Beguile comment. Routine names colored as function entities. Must not use `#i6\\b` before this — `#i6replace` has no word boundary after `#i6`. Case-insensitive.",
+          "match": "(?i)(#i6replace)\\b(?:\\s+([a-zA-Z_][a-zA-Z0-9_]*))?(?:\\s+([a-zA-Z_][a-zA-Z0-9_]*))?",
+          "captures": {
+            "1": { "name": "keyword.control.directive.beguile" },
+            "2": { "name": "entity.name.function.beguile" },
+            "3": { "name": "entity.name.function.beguile" }
+          }
         }
+      ]
+    },
+
+    "verb-extend-members": {
+      "comment": "Contextual member keywords inside verb-extend bodies: `synonyms`, `grammar`, and `priority` used as statement assignment targets (`synonyms = { }`, `grammar += { }`, `priority = N`). Referenced ONLY from the extend-body rules, so it never fires on an ordinary variable named `priority`/`synonyms` elsewhere in the file. `grammar` also matches keywords-type-declaration (storage.type) globally; re-asserting storage.type here keeps the trio visually consistent (and matches how `grammar` already colors in verb-declaration bodies). Lookahead requires a following `=`, `+=`, or `{` so a bare mention isn't recolored. Case-insensitive — Beguile lexer is case-insensitive.",
+      "match": "(?i)\\b(synonyms|grammar|priority)\\b(?=\\s*(?:\\+?=|\\{))",
+      "captures": {
+        "1": { "name": "storage.type.beguile" }
+      }
+    },
+
+    "extend-body-single": {
+      "comment": "Single-line extend body: `extend Name { ... }`. MUST be tried before the multi-line extend-body rule so an inline closing } isn't mistaken for the start of an unclosed block (mirrors i6-block-single vs i6-block). Applies verb-extend member-keyword highlighting to the brace body. Case-insensitive.",
+      "match": "(?i)^(\\s*)(extend)\\b([^{\\n]*)(\\{)([^\\n]*)(\\})([^\\n]*)$",
+      "captures": {
+        "2": { "name": "storage.modifier.beguile" },
+        "3": { "patterns": [ { "include": "$self" } ] },
+        "5": { "patterns": [ { "include": "#verb-extend-members" }, { "include": "$self" } ] },
+        "7": { "patterns": [ { "include": "$self" } ] }
+      }
+    },
+
+    "extend-body": {
+      "comment": "Multi-line `extend Name { ... }` body. `extend` is global-context, so the closing } aligns with the opener's indentation — the `^\\1}` end mirrors i6-block. The begin ends at the opening { and lets the inner patterns (verb-extend member keywords + $self) tokenize the rest; genuine single-line extends are consumed by extend-body-single first, so only true multi-line openers reach here. Worst case on unconventional indentation is an early end (contextual highlighting stops a few lines short), never a swallow-to-EOF. Case-insensitive.",
+      "begin": "(?i)^(\\s*)(extend)\\b([^{\\n]*)(\\{)",
+      "end": "^\\1\\}",
+      "beginCaptures": {
+        "2": { "name": "storage.modifier.beguile" },
+        "3": { "patterns": [ { "include": "$self" } ] }
+      },
+      "patterns": [
+        { "include": "#verb-extend-members" },
+        { "include": "$self" }
       ]
     },
 
