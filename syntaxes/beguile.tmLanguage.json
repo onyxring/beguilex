@@ -358,13 +358,13 @@
     "keywords-declaration": {
       "comment": "Case-insensitive.",
       "name": "storage.modifier.beguile",
-      "match": "(?i)\\b(byVal|extern|extend|emitter|replace|const|alias|ref|readonly|static|explicit|default)\\b"
+      "match": "(?i)\\b(byVal|extern|extend|emitter|replace|const|alias|ref|readonly|static|explicit|default|superposed|additive)\\b"
     },
 
     "keywords-type-declaration": {
       "comment": "Case-insensitive — `class` / `Class` / `CLASS` all match.",
       "name": "storage.type.beguile",
-      "match": "(?i)\\b(class|object|enum|bnum|verb|grammar|attribute|patternElement|grammarRule|grammarRuleList)\\b"
+      "match": "(?i)\\b(class|object|enum|bnum|verb|grammar|attribute|property|patternElement|grammarRule|grammarRuleList)\\b"
     },
 
     "keywords-type-primitive": {
