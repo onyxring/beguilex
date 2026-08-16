@@ -63,8 +63,15 @@ export interface RoutineInfo {
 }
 
 export class DebugInfo {
-    /** infLine → bgl location */
-    private infToBgl    = new Map<number, BglLocation>();
+    /**
+     * infLine → bgl location(s). A single .inf line can legitimately host more than
+     * one .bgl statement (e.g. inlined/collapsed emission), so this is a LIST, not a
+     * single value. Keeping every candidate is load-bearing for the reverse direction
+     * (`bglToVmAddrs`): a breakpoint on any of the .bgl lines that share an .inf line
+     * must still bind. (Historically this was `Map<number, BglLocation>` with
+     * last-write-wins, which silently dropped all but the last candidate.)
+     */
+    private infToBgl    = new Map<number, BglLocation[]>();
     /** VM bytecode address → { fileIndex, line } in the .dbg source table */
     private addrToInf   = new Map<number, { fileIndex: number; line: number }>();
     /** file-index → resolved absolute path of that .inf source file */
@@ -83,6 +90,14 @@ export class DebugInfo {
     private bglTypeMap   = new Map<string, BglTypeInfo>();
     /** I6 routine name → { varName → BglType } for locals (from .types) */
     private routineTyped = new Map<string, Map<string, BglType>>();
+    /**
+     * I6 routine name → { varName → storage metadata } for locals (from .types,
+     * 4th/5th columns: `local <name> <type> <storage>[ synthetic]`). `storage` is
+     * `slot` for a frame-resident local or `_bglFrm-->N` for one spilled to the
+     * frame-pool at word offset N (Z-machine >15-local case). `synthetic` marks a
+     * compiler-inserted local (e.g. the `_bglFrm` spill pointer) to hide.
+     */
+    private routineLocalMeta = new Map<string, Map<string, { storage: string; synthetic: boolean }>>();
     /** global variable name → BglType (from .types) */
     private globalTyped  = new Map<string, BglType>();
     /** Beguile enum name → (numeric value → display name) */
@@ -120,6 +135,7 @@ export class DebugInfo {
         // State for [types] parsing
         let currentType:   { name: string; props: BglProp[] } | null = null;
         let currentLocals: Map<string, BglType> | null = null;
+        let currentLocalMeta: Map<string, { storage: string; synthetic: boolean }> | null = null;
         let currentEnum:   Map<number, string> | null = null;
 
         for (const raw of text.split('\n')) {
@@ -141,7 +157,13 @@ export class DebugInfo {
                     const infLine = parseInt(parts[0], 10);
                     const bglLine = parseInt(parts[2], 10);
                     if (!isNaN(infLine) && !isNaN(bglLine)) {
-                        this.infToBgl.set(infLine, { file: path.resolve(parts[1]), line: bglLine });
+                        const loc = { file: path.resolve(parts[1]), line: bglLine };
+                        const list = this.infToBgl.get(infLine);
+                        if (!list) {
+                            this.infToBgl.set(infLine, [loc]);
+                        } else if (!list.some(l => l.file === loc.file && l.line === loc.line)) {
+                            list.push(loc);   // dedup identical (file,line) repeats
+                        }
                     }
                     break;
                 }
@@ -195,11 +217,18 @@ export class DebugInfo {
                             currentType   = null;
                             currentEnum   = null;
                             currentLocals = new Map();
+                            currentLocalMeta = new Map();
                             this.routineTyped.set(parts[1], currentLocals);
+                            this.routineLocalMeta.set(parts[1], currentLocalMeta);
                             break;
                         case 'local':
                             if (currentLocals && parts.length >= 3) {
                                 currentLocals.set(parts[1], parts[2]);
+                                // parts[3] = storage (`slot` | `_bglFrm-->N`), trailing `synthetic` marks a hide.
+                                currentLocalMeta?.set(parts[1], {
+                                    storage:   parts[3] ?? 'slot',
+                                    synthetic: parts.slice(3).includes('synthetic'),
+                                });
                             }
                             break;
                         case 'global':
@@ -466,6 +495,55 @@ export class DebugInfo {
         return this.globalTyped.get(varName);
     }
 
+    /** Storage location of a local (from .types): `slot` (frame-resident) or `_bglFrm-->N` (spilled). */
+    localStorage(routineAddr: number, varName: string): string | undefined {
+        const routine = this.routineContaining(routineAddr) ?? this.routineByAddr(routineAddr);
+        return routine ? this.routineLocalMeta.get(routine.name)?.get(varName)?.storage : undefined;
+    }
+
+    /**
+     * Frame-pool word offset for a spilled local (Z-machine >15-local case), or
+     * undefined for a frame-resident (`slot`) local. Parses the `_bglFrm-->N` storage.
+     * The adapter reads the value at `mem[_bglFrm] + N*WORDSIZE` (needs a runtime word
+     * read — the interpreter-phase piece).
+     */
+    localSpillIndex(routineAddr: number, varName: string): number | undefined {
+        const s = this.localStorage(routineAddr, varName);
+        const m = s ? /-->(\d+)$/.exec(s) : null;
+        return m ? parseInt(m[1], 10) : undefined;
+    }
+
+    /**
+     * True for a compiler-inserted local carrying the `synthetic` marker (e.g. the
+     * `_bglFrm` spill pointer). NOT used to hide anything — per Jim's call the Variables
+     * pane conceals nothing — but kept so the presentation layer can annotate/order if
+     * desired. `undefined` routine or unmarked local ⇒ false.
+     */
+    localSynthetic(routineAddr: number, varName: string): boolean {
+        const routine = this.routineContaining(routineAddr) ?? this.routineByAddr(routineAddr);
+        return !!(routine && this.routineLocalMeta.get(routine.name)?.get(varName)?.synthetic);
+    }
+
+    /**
+     * Locals spilled to the `_bglFrm` frame-pool (Z-machine >15-local case), each with its
+     * word offset into the pool. These do NOT occupy frame slots, so the adapter must read
+     * them via `readWord(mem[_bglFrm] + index*WORDSIZE)` rather than from the VM frame.
+     * Empty on Glulx (no spilling) and for routines that fit in ≤15 locals.
+     */
+    spilledLocals(routineAddr: number): { name: string; type: BglType | undefined; index: number }[] {
+        const routine = this.routineContaining(routineAddr) ?? this.routineByAddr(routineAddr);
+        if (!routine) { return []; }
+        const meta  = this.routineLocalMeta.get(routine.name);
+        const types = this.routineTyped.get(routine.name);
+        if (!meta) { return []; }
+        const out: { name: string; type: BglType | undefined; index: number }[] = [];
+        for (const [name, m] of meta) {
+            const im = /-->(\d+)$/.exec(m.storage);
+            if (im) { out.push({ name, type: types?.get(name), index: parseInt(im[1], 10) }); }
+        }
+        return out;
+    }
+
     // ── Global variable queries ───────────────────────────────────────────────
 
     /** All global variables declared in the .dbg file. */
@@ -545,7 +623,13 @@ export class DebugInfo {
         if (!entry) { return undefined; }
         // bgldbg [map] keys are I6 line numbers from the main file (file-index 0) only.
         if (entry.fileIndex !== 0) { return undefined; }
-        return this.infToBgl.get(entry.line);
+        // Forward resolution is addr → .inf line → .bgl, and a collapsed .inf line may
+        // carry several .bgl candidates. The .dbg gives only one line per address, so
+        // there is no finer key to disambiguate on here — return the first candidate
+        // deterministically. (Post the superposed-anchor fix, genuinely-distinct
+        // multi-candidate lines are rare; the reverse direction keeps them all.)
+        const locs = this.infToBgl.get(entry.line);
+        return locs ? locs[0] : undefined;
     }
 
     /**
@@ -557,8 +641,10 @@ export class DebugInfo {
         // Step 1: collect all I6 lines (file-index 0) that map to this bgl location.
         const normFile = path.resolve(bglFile);
         const infLines: number[] = [];
-        for (const [infLine, loc] of this.infToBgl) {
-            if (loc.line === bglLine && loc.file === normFile) {
+        for (const [infLine, locs] of this.infToBgl) {
+            // Check EVERY candidate on this .inf line — a breakpoint on a .bgl line that
+            // shares an .inf line with another must still bind (the last-write-wins bug).
+            if (locs.some(loc => loc.line === bglLine && loc.file === normFile)) {
                 infLines.push(infLine);
             }
         }
@@ -575,7 +661,9 @@ export class DebugInfo {
     /** All unique .bgl source files referenced in the debug map. */
     allBglSourceFiles(): string[] {
         const files = new Set<string>();
-        for (const loc of this.infToBgl.values()) { files.add(loc.file); }
+        for (const locs of this.infToBgl.values()) {
+            for (const loc of locs) { files.add(loc.file); }
+        }
         return Array.from(files).sort();
     }
 
@@ -589,8 +677,8 @@ export class DebugInfo {
      */
     isBglSource(filePath: string): boolean {
         const norm = path.resolve(filePath);
-        for (const loc of this.infToBgl.values()) {
-            if (loc.file === norm) return true;
+        for (const locs of this.infToBgl.values()) {
+            if (locs.some(loc => loc.file === norm)) return true;
         }
         return false;
     }

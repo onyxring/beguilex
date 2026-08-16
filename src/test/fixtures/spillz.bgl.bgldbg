@@ -1,0 +1,298 @@
+[map]
+60	/Users/jim/projects/IF-Projects/beguiler/beguiLib/core/__beguileCore.bgl	203
+64	/Users/jim/projects/IF-Projects/beguiler/beguiLib/core/_attribute.bgl	23
+65	/Users/jim/projects/IF-Projects/beguiler/beguiLib/core/_zcodeCore.bgl	17
+67	/Users/jim/projects/IF-Projects/beguiler/beguiLib/core/__beguileCore.bgl	49
+70	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	33
+71	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	34
+72	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	35
+73	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	36
+74	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	37
+75	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	38
+76	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	39
+70	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	33
+80	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	145
+81	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	145
+84	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	146
+87	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	154
+88	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	155
+89	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	156
+90	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	157
+91	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	158
+94	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	161
+95	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	162
+96	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	163
+97	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	164
+100	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	172
+101	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	173
+102	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	174
+103	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	174
+105	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	175
+106	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	176
+108	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	177
+111	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	183
+112	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	184
+113	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	185
+116	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	189
+117	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	190
+118	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	190
+120	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	191
+123	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	195
+124	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	196
+125	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	196
+127	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	198
+130	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	202
+131	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	203
+132	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	204
+133	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	205
+134	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	206
+136	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	209
+140	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	226
+141	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	227
+142	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	228
+143	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	228
+146	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	229
+149	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	234
+150	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	235
+151	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	235
+153	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	236
+156	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	242
+157	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	243
+158	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	244
+161	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	250
+162	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	251
+163	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	252
+164	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	253
+168	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	259
+169	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	260
+170	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	260
+172	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	261
+173	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	262
+174	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	263
+177	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	270
+178	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	271
+179	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	271
+181	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	272
+182	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	272
+184	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	274
+185	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	274
+187	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	275
+188	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	276
+189	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	277
+192	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	283
+195	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	292
+196	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	293
+197	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	293
+199	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	295
+200	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	295
+202	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	298
+203	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	299
+206	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	306
+207	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	307
+208	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	308
+209	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	309
+210	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	310
+211	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	311
+214	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	314
+219	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	332
+222	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	336
+223	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	336
+225	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	337
+226	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	338
+227	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	339
+230	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	343
+233	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	347
+236	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	351
+237	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	351
+239	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	352
+242	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	356
+243	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	357
+244	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	357
+246	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	358
+249	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	362
+250	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	363
+251	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	363
+253	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	364
+254	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	365
+255	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	366
+258	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	377
+259	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	378
+260	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	379
+261	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	380
+262	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	381
+263	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	382
+264	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	383
+266	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	385
+78	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	141
+270	/Users/jim/projects/IF-Projects/beguiler/beguiLib/bglWorld.bgl	44
+273	/private/var/folders/7v/6j9qk1gx5mgdnwmpnfn5v2nr0000gn/T/tmp.Pw8yMNFWYB/spillz.bgl	4
+275	/private/var/folders/7v/6j9qk1gx5mgdnwmpnfn5v2nr0000gn/T/tmp.Pw8yMNFWYB/spillz.bgl	5
+276	/private/var/folders/7v/6j9qk1gx5mgdnwmpnfn5v2nr0000gn/T/tmp.Pw8yMNFWYB/spillz.bgl	5
+277	/private/var/folders/7v/6j9qk1gx5mgdnwmpnfn5v2nr0000gn/T/tmp.Pw8yMNFWYB/spillz.bgl	5
+278	/private/var/folders/7v/6j9qk1gx5mgdnwmpnfn5v2nr0000gn/T/tmp.Pw8yMNFWYB/spillz.bgl	5
+279	/private/var/folders/7v/6j9qk1gx5mgdnwmpnfn5v2nr0000gn/T/tmp.Pw8yMNFWYB/spillz.bgl	5
+280	/private/var/folders/7v/6j9qk1gx5mgdnwmpnfn5v2nr0000gn/T/tmp.Pw8yMNFWYB/spillz.bgl	5
+281	/private/var/folders/7v/6j9qk1gx5mgdnwmpnfn5v2nr0000gn/T/tmp.Pw8yMNFWYB/spillz.bgl	5
+282	/private/var/folders/7v/6j9qk1gx5mgdnwmpnfn5v2nr0000gn/T/tmp.Pw8yMNFWYB/spillz.bgl	5
+283	/private/var/folders/7v/6j9qk1gx5mgdnwmpnfn5v2nr0000gn/T/tmp.Pw8yMNFWYB/spillz.bgl	6
+284	/private/var/folders/7v/6j9qk1gx5mgdnwmpnfn5v2nr0000gn/T/tmp.Pw8yMNFWYB/spillz.bgl	6
+285	/private/var/folders/7v/6j9qk1gx5mgdnwmpnfn5v2nr0000gn/T/tmp.Pw8yMNFWYB/spillz.bgl	6
+286	/private/var/folders/7v/6j9qk1gx5mgdnwmpnfn5v2nr0000gn/T/tmp.Pw8yMNFWYB/spillz.bgl	6
+287	/private/var/folders/7v/6j9qk1gx5mgdnwmpnfn5v2nr0000gn/T/tmp.Pw8yMNFWYB/spillz.bgl	6
+288	/private/var/folders/7v/6j9qk1gx5mgdnwmpnfn5v2nr0000gn/T/tmp.Pw8yMNFWYB/spillz.bgl	6
+289	/private/var/folders/7v/6j9qk1gx5mgdnwmpnfn5v2nr0000gn/T/tmp.Pw8yMNFWYB/spillz.bgl	6
+290	/private/var/folders/7v/6j9qk1gx5mgdnwmpnfn5v2nr0000gn/T/tmp.Pw8yMNFWYB/spillz.bgl	7
+291	/private/var/folders/7v/6j9qk1gx5mgdnwmpnfn5v2nr0000gn/T/tmp.Pw8yMNFWYB/spillz.bgl	7
+292	/private/var/folders/7v/6j9qk1gx5mgdnwmpnfn5v2nr0000gn/T/tmp.Pw8yMNFWYB/spillz.bgl	7
+293	/private/var/folders/7v/6j9qk1gx5mgdnwmpnfn5v2nr0000gn/T/tmp.Pw8yMNFWYB/spillz.bgl	7
+294	/private/var/folders/7v/6j9qk1gx5mgdnwmpnfn5v2nr0000gn/T/tmp.Pw8yMNFWYB/spillz.bgl	8
+273	/private/var/folders/7v/6j9qk1gx5mgdnwmpnfn5v2nr0000gn/T/tmp.Pw8yMNFWYB/spillz.bgl	4
+298	/private/var/folders/7v/6j9qk1gx5mgdnwmpnfn5v2nr0000gn/T/tmp.Pw8yMNFWYB/spillz.bgl	10
+299	/private/var/folders/7v/6j9qk1gx5mgdnwmpnfn5v2nr0000gn/T/tmp.Pw8yMNFWYB/spillz.bgl	10
+298	/private/var/folders/7v/6j9qk1gx5mgdnwmpnfn5v2nr0000gn/T/tmp.Pw8yMNFWYB/spillz.bgl	10
+[sym]
+_zcode	_zcode	object
+bgl	bgl	object
+bgl.ui	ui	property
+bgl.zcode	zcode	property
+bgl.asm	asm	property
+bgl.util	util	property
+bgl.world	world	property
+_bglarraycompareasc	_bglarraycompareasc	function
+_bglarray	_bglarray	object
+_bglworldbufidx	_bglworldbufidx	global
+spill	spill	function
+initialise	initialise	function
+no_attribute	no_attribute	global
+[types]
+type verb
+  prop grammar grammar grammarrulelist
+  prop meta meta bool
+  prop priority priority int
+type bgl
+  prop zcode zcode _zcode
+routine _bglunsignedcompare
+  local x int slot
+  local y int slot
+  local u int slot
+  local v int slot
+routine _bglunsigneddiv
+  local a int slot
+  local b int slot
+  local lowhalf int slot
+  local hq int slot
+  local hr int slot
+  local combined int slot
+routine _bglunsignedmod
+  local a int slot
+  local b int slot
+routine _bglpow
+  local i int slot
+  local p int slot
+  local retval int slot
+  local t int slot
+routine _bglabs
+  local p int slot
+routine _bglshiftleft
+  local i int slot
+  local numbits int slot
+routine _bglshiftright
+  local i int slot
+  local numbits int slot
+routine _bglunsignedshiftright
+  local i int slot
+  local numbits int slot
+routine _bglmin
+  local a int slot
+  local b int slot
+routine _bglmax
+  local a int slot
+  local b int slot
+routine _bglclamp
+  local v int slot
+  local lo int slot
+  local hi int slot
+routine _bglsign
+  local v int slot
+routine _bglprintuint
+  local v int slot
+routine _bglcharislower
+  local c char slot
+routine _bglcharisupper
+  local c char slot
+routine _bglcharisalpha
+  local c char slot
+routine _bglcharisnumeric
+  local c char slot
+routine _bglcharisalphanumeric
+  local c char slot
+routine _bglcharisvowel
+  local c char slot
+  local v char slot
+  local _bglfi0 var slot synthetic
+routine _bglcharisconsonant
+  local c char slot
+routine _bglchartolower
+  local c char slot
+routine _bglchartoupper
+  local c char slot
+routine _bglarraycompareasc
+  local lhs var slot
+  local rhs var slot
+routine _bglworldnextbuf
+routine _bglworldstamp
+  local buf array<object> slot
+  local count int slot
+routine _bglworldgetall
+  local pred var slot
+  local buf array slot
+  local o object slot
+  local n int slot
+routine _bglworldinstances
+  local cls var slot
+  local pred var slot
+  local buf array slot
+  local o object slot
+  local n int slot
+routine _bglworldinparent
+  local parent object slot
+  local pred var slot
+  local buf array slot
+  local o object slot
+  local n int slot
+routine spill
+  local p int slot
+  local a0 int slot
+  local a1 int slot
+  local a2 int slot
+  local a3 int slot
+  local a4 int slot
+  local a5 int slot
+  local a6 int slot
+  local a7 int slot
+  local a8 int slot
+  local a9 int slot
+  local a10 int slot
+  local a11 int slot
+  local a12 int slot
+  local a13 int _bglFrm-->0
+  local a14 int _bglFrm-->1
+  local a15 int _bglFrm-->2
+  local a16 int _bglFrm-->3
+  local a17 int _bglFrm-->4
+  local a18 int _bglFrm-->5
+  local _bglFrm int slot synthetic
+routine initialise
+global no_attribute attribute
+global _bglvowels bytearray
+global _bglui _bglobject
+global _zcode _bglobject
+global _bglutil _bglobject
+global bgl _bglobject
+global _bglarray object
+global _bglworldbuf0 array
+global _bglworldbuf1 array
+global _bglworldbuf2 array
+global _bglworldbuf3 array
+global _bglworldbufidx int
+global _bglworld _bglobject

@@ -325,6 +325,7 @@
   "scripts": {
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
+    "test:debug": "tsc -p ./ && node ./out/test/debugMapHarness.js",
     "package": "vsce package",
     "deploy": "tsc -p ./ && code --command workbench.action.reloadWindow"
   },

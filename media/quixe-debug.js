@@ -56,6 +56,11 @@ window._bglReadProp=function(obj,propId){
     return null;
   }catch(_e){return null;}
 };
+/* bgl-debug: read one raw memory word at a byte address (Glulx word = 4 bytes).
+   Used to read spilled locals from the _bglFrm frame-pool. */
+window._bglReadWord=function(addr){
+  try{return Mem4(addr);}catch(_e){return null;}
+};
 /* bgl-debug: write a scalar value to a single-word object property.
    Same table layout as _bglReadProp; writes through the data pointer. */
 window._bglSetProp=function(obj,propId,val){

@@ -381,6 +381,8 @@ export class BeguileDebugAdapter implements vscode.DebugAdapter {
                             })
                         );
                         vars.push(...localVars.filter(v => !f || v.name.toLowerCase().includes(f)));
+                        const spilledF = await this.buildSpilledLocals(routine, vmFrame);
+                        vars.push(...spilledF.filter(v => !f || v.name.toLowerCase().includes(f)));
                     }
                     // Self props
                     const selfAddrF = this.debugInfo?.selfAddress();
@@ -491,6 +493,8 @@ export class BeguileDebugAdapter implements vscode.DebugAdapter {
                             })
                         );
                         vars.push(...localVars.filter(v => !f || v.name.toLowerCase().includes(f)));
+                        const spilled = await this.buildSpilledLocals(routine, vmFrame);
+                        vars.push(...spilled.filter(v => !f || v.name.toLowerCase().includes(f)));
                     }
                 }
 
@@ -1026,6 +1030,27 @@ export class BeguileDebugAdapter implements vscode.DebugAdapter {
             : null;
         const raw = Array.isArray(val) ? (val[0] ?? 0) : (val ?? 0);
         return this.makeVarAsync(p.bglName, raw, p.type || undefined);
+    }
+
+    /**
+     * Build DAP variables for locals SPILLED to the `_bglFrm` frame-pool (Z-machine
+     * >15-local routines). These aren't VM frame slots, so we read `_bglFrm`'s value
+     * from its frame slot and fetch each spilled local at `mem[_bglFrm] + index*WORDSIZE`.
+     * Spilling only happens on the Z-machine (2-byte words); returns [] otherwise.
+     */
+    private async buildSpilledLocals(routine: any, vmFrame: any): Promise<any[]> {
+        if (!routine || !this.debugInfo || !this.panel) { return []; }
+        const spilled = this.debugInfo.spilledLocals(routine.startAddr);
+        if (spilled.length === 0) { return []; }
+        const frmLocal = routine.locals.find((l: any) => l.name === '_bglFrm');
+        if (!frmLocal) { return []; }
+        const frmVal = vmFrame.locals[frmLocal.frameOffset];
+        if (!frmVal) { return []; }
+        const WORDSIZE = 2; // spill is Z-machine-only → 2-byte words
+        return Promise.all(spilled.map(async s => {
+            const raw = await this.panel!.readWord(frmVal + s.index * WORDSIZE);
+            return this.makeVarAsync(s.name, raw ?? 0, s.type);
+        }));
     }
 
     private async makeVarAsync(name: string, raw: number, bglType: string | undefined): Promise<any> {

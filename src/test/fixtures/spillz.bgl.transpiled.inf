@@ -1,0 +1,301 @@
+!% -v8
+!% -E1
+!% $OMIT_UNUSED_ROUTINES=1
+!% ++include_path=/Users/jim/projects/IF-Projects/inform6/lib
+Constant beguiler = 1000;
+#Ifdef beguiler;#Endif;
+Constant _BGL_WORLD_BUFSIZE = 128;
+Array _bglFramePool --> 64;
+Global _bglFrameTop = 0;
+ [ _bglFrameAlloc size r;
+    if (_bglFrameTop + size > 64) {
+        print "^[Beguile runtime error: frame pool exhausted]^";
+        quit;
+    }
+    r = _bglFrameTop;
+    _bglFrameTop = _bglFrameTop + size;
+    return _bglFramePool + (r * WORDSIZE);
+ ];
+ [ _bglFrameFree size;
+    _bglFrameTop = _bglFrameTop - size;
+ ];
+ ! Allocate + initialize a local Beguile-declared word array of user-size `size`.
+ ! Layout matches static tracked arrays: [header, data×size, length, magic].
+ ! Returns a pointer at the header slot. Caller must free with _bglFrameFree(size+3)
+ ! on every return path (driven by the function's cleanups list).
+ ! Emitted only when the program includes <array>.
+ [ _bglArrayLocalAlloc size r i;
+    r = _bglFrameAlloc(size + 3);
+    r-->0 = size + 2;
+    for (i = 1: i <= size: i++) r-->i = 0;
+    r-->(size + 1) = 0;
+    r-->(size + 2) = $9084;
+    return r;
+ ];
+ ! Plain variant for programs that don't include <array>: untracked layout
+ ! [header=size, data×size]. Matches the global-array emission gated on the
+ ! same arrayInUse flag. Caller frees with _bglFrameFree(size+1).
+ [ _bglArrayLocalAllocPlain size r i;
+    r = _bglFrameAlloc(size + 1);
+    r-->0 = size;
+    for (i = 1: i <= size: i++) r-->i = 0;
+    return r;
+ ];
+ ! Allocate a local Beguile-declared BYTE array (array<char>) of `nbytes` data
+ ! bytes. Layout matches the standalone hybrid buffer (`Array X buffer N`): the
+ ! capacity/length WORD lives at -->0, the data bytes start at ->WORDSIZE. The
+ ! frame slice is sized in words: one length word plus ceil(nbytes/WORDSIZE)
+ ! data words. Caller frees the same word count via _bglByteArrayLocalFree(nbytes).
+ [ _bglByteArrayLocalAlloc nbytes words r i;
+    words = 1 + ((nbytes + WORDSIZE - 1) / WORDSIZE);
+    r = _bglFrameAlloc(words);
+    for (i = 0: i < words: i++) r-->i = 0;
+    r-->0 = nbytes;   ! capacity, mirroring `buffer N`'s length word
+    return r;
+ ];
+ [ _bglByteArrayLocalFree nbytes;
+    _bglFrameFree(1 + ((nbytes + WORDSIZE - 1) / WORDSIZE));
+ ];
+global _bglInitDone = 0;
+[bglInit;
+    if(_bglInitDone) return;
+    _bglInitDone = 1;
+];
+ Constant NO_ATTRIBUTE 0; 
+object _zcode
+;
+object bgl
+  with zcode _zcode
+;
+[_bglArrayCompareAsc lhs rhs;
+    
+        if(lhs < rhs) return -1;
+        if(lhs > rhs) return 1;
+        return 0;
+    
+    return 0;
+];
+object _bglArray
+  with rawGet [addr slot;
+     return addr-->slot; 
+    return 0;
+  ],
+       rawSet [addr slot v;
+     addr-->slot = v; 
+  ],
+       get [obj prop n;
+    
+            if(metaclass(obj)==object) return obj.&prop-->n;
+            return obj-->(n+1);
+        
+    return 0;
+  ],
+       set [obj prop n v;
+    
+            if(metaclass(obj)==object){ obj.&prop-->n = v; return; }
+            obj-->(n+1) = v;
+        
+  ],
+       copy [dobj dprop sobj sprop n cap i;
+    n=self.length(sobj,sprop);
+    cap=self.size(dobj,dprop);
+    if (n > cap) {
+        n = cap;
+    }
+    for (i = 0 : i < n : i++) {
+        self.set(dobj, dprop, i, self.get(sobj,sprop,i));
+    }
+    self.setlength(dobj, dprop, n);
+  ],
+       isTracked [obj prop hdr;
+     if(metaclass(obj)==object) rfalse; 
+    hdr = self.rawget(obj,0);
+    return self.rawget(obj,hdr)==36996&&self.rawget(obj,hdr-1)>=0;
+  ],
+       size [obj prop;
+     if(metaclass(obj)==object) return obj.#prop/WORDSIZE; 
+    if (self.istracked(obj,prop)) {
+        return self.rawget(obj,0)-2;
+    }
+    return self.rawget(obj,0);
+  ],
+       length [obj prop;
+     if(metaclass(obj)==object) return obj.#prop/WORDSIZE; 
+    if (self.istracked(obj,prop)) {
+        return self.rawget(obj,self.rawget(obj,0)-1);
+    }
+    return self.rawget(obj,0);
+  ],
+       setLength [obj prop n;
+     if(metaclass(obj)==object) return; 
+    if (self.istracked(obj,prop)) {
+        if (n < 0) {
+            print (string)"^[Beguile runtime error: setLength value exceeds signed range (max 32767 on Z, 2^31-1 on Glulx)]^";
+             quit; 
+        }
+        self.set(obj, prop, self.size(obj,prop), n);
+    }
+  ],
+       indexOf [obj prop val sz t;
+    sz=self.size(obj,prop);
+    for (t = 0 : t < sz : t++) {
+        if (self.get(obj,prop,t)==val) {
+            return t;
+        }
+    }
+    return -1;
+  ],
+       clear [obj prop sz t;
+    sz=self.size(obj,prop);
+    for (t = 0 : t < sz : t++) {
+        self.set(obj, prop, t, 0);
+    }
+    self.setLength(obj, prop, 0);
+  ],
+       swap [obj prop pos1 pos2 tmp;
+    tmp = self.get(obj,prop,pos1);
+    self.set(obj, prop, pos1, self.get(obj,prop,pos2));
+    self.set(obj, prop, pos2, tmp);
+  ],
+       reverse [obj prop len half i;
+    len=self.length(obj,prop);
+    half=len / 2;
+    for (i = 0 : i < half : i++) {
+        self.swap(obj, prop, i, len - 1 - i);
+    }
+  ],
+       append [obj prop val len;
+    len=self.length(obj,prop);
+    if (len >= self.size(obj,prop)) {
+        return false;
+    }
+    self.set(obj, prop, len, val);
+    self.setLength(obj, prop, len + 1);
+    return true;
+  ],
+       insert [obj prop pos val len i;
+    len=self.length(obj,prop);
+    if (len >= self.size(obj,prop)) {
+        return false;
+    }
+    if (pos < 0 || pos > len) {
+        return false;
+    }
+    for (i = len : i > pos : i--) {
+        self.set(obj, prop, i, self.get(obj,prop,i - 1));
+    }
+    self.set(obj, prop, pos, val);
+    self.setLength(obj, prop, len + 1);
+    return true;
+  ],
+       prepend [obj prop val;
+    return self.insert(obj,prop,0,val);
+  ],
+       remove [obj prop pos len i;
+    len=self.length(obj,prop);
+    if (pos < 0 || pos >= len) {
+        return;
+    }
+    for (i = pos : i < len - 1 : i++) {
+        self.set(obj, prop, i, self.get(obj,prop,i + 1));
+    }
+    self.set(obj, prop, len - 1, 0);
+    self.setLength(obj, prop, len - 1);
+  ],
+       removeValue [obj prop val pos len;
+    pos = 0;
+    len=self.length(obj,prop);
+    while (pos < len) {
+        if (self.get(obj,prop,pos)==val) {
+            self.remove(obj, prop, pos);
+            len = self.length(obj,prop);
+        }
+        else {
+             pos++ ;
+        }
+    }
+  ],
+       push [obj prop val;
+    self.insert(obj, prop, 0, val);
+  ],
+       pop [obj prop v;
+    if (self.length(obj,prop) == 0) {
+        return 0;
+    }
+    v = self.get(obj,prop,0);
+    self.remove(obj, prop, 0);
+    return v;
+  ],
+       dequeue [obj prop;
+    return self.pop(obj,prop);
+  ],
+       enqueue [obj prop val;
+    self.append(obj, prop, val);
+  ],
+       peek [obj prop;
+    if (self.length(obj,prop) == 0) {
+        return 0;
+    }
+    return self.get(obj,prop,0);
+  ],
+       peekEnd [obj prop len;
+    len=self.length(obj,prop);
+    if (len == 0) {
+        return 0;
+    }
+    return self.get(obj,prop,len - 1);
+  ],
+       popEnd [obj prop len v;
+    len=self.length(obj,prop);
+    if (len == 0) {
+        return 0;
+    }
+    v = self.get(obj,prop,len - 1);
+    self.remove(obj, prop, len - 1);
+    return v;
+  ],
+       sort [obj prop compare len i key j;
+    len=self.length(obj,prop);
+    for (i = 1 : i < len : i++) {
+        key = self.get(obj,prop,i);
+        j=i - 1;
+        while (j >= 0 && compare(self.get(obj,prop,j),key) > 0) {
+            self.set(obj, prop, j + 1, self.get(obj,prop,j));
+             j-- ;
+        }
+        self.set(obj, prop, j + 1, key);
+    }
+  ]
+;
+global _bglWorldBufIdx = -1;
+#include "/Users/jim/projects/IF-Projects/inform6/lib/parser.h";
+#include "/Users/jim/projects/IF-Projects/inform6/lib/verblib.h";
+[spill p a0 a1 a2 a3 a4 a5 a6 a7 a8 a9 a10 a11 a12 _bglFrm;
+    _bglFrm = _bglFrameAlloc(6);
+    a0=p;
+    a1 = 1;
+    a2 = 2;
+    a3 = 3;
+    a4 = 4;
+    a5 = 5;
+    a6 = 6;
+    a7 = 7;
+    a8 = 8;
+    a9 = 9;
+    a10 = 10;
+    a11 = 11;
+    a12 = 12;
+    _bglFrm-->0 = 13;
+    _bglFrm-->1 = 14;
+    _bglFrm-->2 = 15;
+    _bglFrm-->3 = 16;
+    _bglFrm-->4 = 17;
+    _bglFrm-->5 = 18;
+    _bglFrameFree(6);
+    return a0 + a1 + a2 + a3 + a4 + a5 + a6 + a7 + a8 + a9 + a10 + a11 + a12 + _bglFrm-->0 + _bglFrm-->1 + _bglFrm-->2 + _bglFrm-->3 + _bglFrm-->4 + _bglFrm-->5;
+    _bglFrameFree(6);
+];
+[initialise;
+    print spill(7);
+];
+#include "/Users/jim/projects/IF-Projects/inform6/lib/grammar.h";

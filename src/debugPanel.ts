@@ -49,6 +49,7 @@ export class DebugPanel {
     private onClose:         (column: vscode.ViewColumn | undefined) => void;
     onDebugOutput?:          (text: string) => void;
     private pendingPropReads = new Map<number, (value: number | number[] | null) => void>();
+    private pendingWordReads = new Map<number, (value: number | null) => void>();
     private pendingWrites    = new Map<number, (ok: boolean) => void>();
     private pendingDecodes   = new Map<number, (value: string | null) => void>();
     private pendingAttrReads = new Map<number, (value: number[] | null) => void>();
@@ -140,6 +141,12 @@ export class DebugPanel {
                     const resolve = this.pendingPropReads.get(msg.reqId);
                     if (resolve) {
                         this.pendingPropReads.delete(msg.reqId);
+                        resolve(msg.value ?? null);
+                    }
+                } else if (msg.type === 'readWordResult' && msg.reqId !== undefined) {
+                    const resolve = this.pendingWordReads.get(msg.reqId);
+                    if (resolve) {
+                        this.pendingWordReads.delete(msg.reqId);
                         resolve(msg.value ?? null);
                     }
                 } else if (msg.type === 'writeResult' && msg.reqId !== undefined) {
@@ -457,6 +464,13 @@ ${isZMachine ? `<script src="${zvmJs}"></script><script src="${zvmDbgJs}"></scri
             }
             vscode.postMessage({ type: 'propertyResult', reqId: msg.reqId, value: propVal });
 
+        } else if (msg.type === 'readWord') {
+            var wordVal = null;
+            if (window._bglReadWord) {
+                try { wordVal = window._bglReadWord(msg.addr); } catch(e) {}
+            }
+            vscode.postMessage({ type: 'readWordResult', reqId: msg.reqId, value: wordVal });
+
         } else if (msg.type === 'setProp') {
             var okp = false;
             if (window._bglSetProp) {
@@ -529,6 +543,19 @@ ${isZMachine ? `<script src="${zvmJs}"></script><script src="${zvmDbgJs}"></scri
         });
     }
 
+    /**
+     * Read a single raw memory word at a byte address from live VM memory
+     * (4 bytes on Glulx, 2 on Z-machine — the interpreter reads its native word).
+     * Used to fetch spilled locals from the `_bglFrm` frame-pool. Paused-only.
+     */
+    readWord(addr: number): Promise<number | null> {
+        const reqId = this.nextReqId++;
+        return new Promise(resolve => {
+            this.pendingWordReads.set(reqId, resolve);
+            this.panel.webview.postMessage({ type: 'readWord', reqId, addr });
+        });
+    }
+
     /** Write a scalar value to a single-word object property in VM memory. */
     setProp(obj: number, propId: number, value: number): Promise<boolean> {
         const reqId = this.nextReqId++;
@@ -593,6 +620,8 @@ ${isZMachine ? `<script src="${zvmJs}"></script><script src="${zvmDbgJs}"></scri
         // Resolve any outstanding property-read / write / decode promises so callers don't hang.
         for (const resolve of this.pendingPropReads.values()) { resolve(null); }
         this.pendingPropReads.clear();
+        for (const resolve of this.pendingWordReads.values()) { resolve(null); }
+        this.pendingWordReads.clear();
         for (const resolve of this.pendingWrites.values()) { resolve(false); }
         this.pendingWrites.clear();
         for (const resolve of this.pendingDecodes.values()) { resolve(null); }

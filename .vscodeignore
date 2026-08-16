@@ -1,0 +1,4 @@
+# Test harness, fixtures, and dev tooling — not part of the shipped extension.
+src/test/**
+out/test/**
+tools/**

@@ -378,6 +378,14 @@
         } catch(e) { return null; }
     };
 
+    /* bgl-debug: read one raw memory word at a byte address (Z-machine word = 2 bytes).
+       Used to read spilled locals from the _bglFrm frame-pool. */
+    window._bglReadWord = function(addr) {
+        var inst = window._bglZvmInstance;
+        if (!inst || !inst.m) { return null; }
+        try { return inst.m.getUint16(addr); } catch(e) { return null; }
+    };
+
     window._bglSetProp = function(obj, propNum, val) {
         var inst = window._bglZvmInstance;
         if (!inst || !inst.m) { return false; }
