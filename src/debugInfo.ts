@@ -260,20 +260,22 @@ export class DebugInfo {
     private loadDbg(dbgPath: string): void {
         const xml = fs.readFileSync(dbgPath, 'utf8');
 
-        // Read i6IncludePaths from the generated .inf file's !% +include_path= ICL directive.
-        // These are the directories where the I6 compiler resolves included library files.
+        // Read the include dirs from the generated .inf's ICL directives — where the I6 compiler
+        // resolves included library files (parser.h, verblib.h, orLibrary, …). Beguiler emits the
+        // ADDITIVE form `++include_path=` (one per dir, several lines), so match one-or-two `+` and
+        // collect EVERY directive (the old single-`+`, break-after-one parse found none → library
+        // frames resolved to a non-existent path in the output folder).
         const infPath = dbgPath.replace(/\.dbg$/, '');
         const i6SearchDirs: string[] = [path.dirname(dbgPath)];
         try {
             const infContent = fs.readFileSync(infPath, 'utf8');
             for (const line of infContent.split('\n')) {
-                const m2 = /^!%\s*\+include_path=(.+)/.exec(line.trim());
+                const m2 = /^!%\s*\+\+?include_path=(.+)/.exec(line.trim());
                 if (m2) {
                     for (const p of m2[1].split(',')) {
                         const dir = p.trim();
-                        if (dir) { i6SearchDirs.push(dir); }
+                        if (dir && !i6SearchDirs.includes(dir)) { i6SearchDirs.push(dir); }
                     }
-                    break;
                 }
             }
         } catch { /* .inf not readable — fall back to dbg dir only */ }
@@ -633,6 +635,43 @@ export class DebugInfo {
     }
 
     /**
+     * Resolve an address to a .bgl location, falling back to the NEAREST PRECEDING mapped line
+     * within the same routine when `addr` isn't itself a sequence point. Used for a caller
+     * frame's return PC (its call-site resume address), which sits just after the call and is
+     * rarely an exact seq-pt. Bounded to `routineContaining(addr)` so it can't bleed into an
+     * unrelated routine — and returns undefined if `addr` isn't inside any routine (so a bogus
+     * PC yields no navigation rather than a wrong-file jump).
+     */
+    vmAddrToBglNearest(addr: number): BglLocation | undefined {
+        const exact = this.vmAddrToBgl(addr);
+        if (exact) { return exact; }
+        const routine = this.routineContaining(addr);
+        if (!routine) { return undefined; }
+        let best = -1;
+        for (const [a, entry] of this.addrToInf) {
+            if (entry.fileIndex === 0 && a <= addr && a >= routine.startAddr && a > best) { best = a; }
+        }
+        return best >= 0 ? this.vmAddrToBgl(best) : undefined;
+    }
+
+    /**
+     * The first mapped sequence-point address of the routine containing `funcAddr` (its entry
+     * line). Used to locate a CALLER stack frame by its (reliable) function address — the VM
+     * state's per-frame return PC is unreliable (it can point into an unrelated routine, sending
+     * a frame click to the wrong file), whereas the routine's own entry is always correct.
+     * Returns undefined for a library routine with no mapping in range.
+     */
+    routineEntryAddr(funcAddr: number): number | undefined {
+        const routine = this.routineByAddr(funcAddr) ?? this.routineContaining(funcAddr);
+        if (!routine) { return undefined; }
+        let first = -1;
+        for (const a of this.addrToInf.keys()) {
+            if (a >= routine.startAddr && a < routine.endAddr && (first < 0 || a < first)) { first = a; }
+        }
+        return first >= 0 ? first : undefined;
+    }
+
+    /**
      * Reverse-lookup: given a .bgl file+line, return all VM addresses
      * that correspond to it.  Used to translate VS Code breakpoints into
      * addresses to watch for in the interpreter.
@@ -698,16 +737,27 @@ export class DebugInfo {
         return Array.from(this.addrToInf.keys());
     }
 
+    /** All file-indexes that resolve to the same physical file. The I6 compiler emits a fresh
+     * <given-path> (→ new file-index) every time it re-enters a file, so ONE physical source (e.g.
+     * a library .h re-entered many times) owns several indexes — and typically only ONE of them
+     * actually carries the sequence-points. Matching a single index silently drops the code, so any
+     * path→addr lookup must union across all of them. */
+    private fileIndexesForPath(filePath: string): Set<number> {
+        const norm = path.resolve(filePath);
+        const idxs = new Set<number>();
+        for (const [idx, p] of this.infFileIndex) {
+            if (path.resolve(p) === norm) { idxs.add(idx); }
+        }
+        return idxs;
+    }
+
     /** All VM addresses in a specific .inf file (for I6 step-over). */
     vmAddrsForInfFile(filePath: string): number[] {
-        let targetIdx: number | undefined;
-        for (const [idx, p] of this.infFileIndex) {
-            if (p === filePath) { targetIdx = idx; break; }
-        }
-        if (targetIdx === undefined) { return []; }
+        const targetIdxs = this.fileIndexesForPath(filePath);
+        if (targetIdxs.size === 0) { return []; }
         const result: number[] = [];
         for (const [addr, entry] of this.addrToInf) {
-            if (entry.fileIndex === targetIdx) { result.push(addr); }
+            if (targetIdxs.has(entry.fileIndex)) { result.push(addr); }
         }
         return result;
     }
@@ -726,16 +776,18 @@ export class DebugInfo {
     /** All VM addresses sharing the same .inf file+line (skip set for I6 stepping). */
     vmAddrsForInfLine(infLine: number, infFilePath?: string): number[] {
         const result: number[] = [];
-        // Resolve which file-index to match
-        let targetFileIndex = 0; // default: main transpiled .inf
+        // Resolve which file-index(es) to match. A physical file can own several indexes (see
+        // fileIndexesForPath) — matching only the first drops the one that carries the seq-points,
+        // so library-file breakpoints never bind. Union across all of them.
+        let targetIdxs: Set<number>;
         if (infFilePath) {
-            const norm = path.resolve(infFilePath);
-            for (const [idx, p] of this.infFileIndex) {
-                if (path.resolve(p) === norm) { targetFileIndex = idx; break; }
-            }
+            targetIdxs = this.fileIndexesForPath(infFilePath);
+            if (targetIdxs.size === 0) { targetIdxs = new Set([0]); } // fall back to main .inf
+        } else {
+            targetIdxs = new Set([0]); // default: main transpiled .inf
         }
         for (const [addr, entry] of this.addrToInf) {
-            if (entry.fileIndex === targetFileIndex && entry.line === infLine) {
+            if (targetIdxs.has(entry.fileIndex) && entry.line === infLine) {
                 result.push(addr);
             }
         }

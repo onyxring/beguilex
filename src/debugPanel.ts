@@ -48,6 +48,8 @@ export class DebugPanel {
     private onStep:          (addr: number, vmState: any) => void;
     private onClose:         (column: vscode.ViewColumn | undefined) => void;
     onDebugOutput?:          (text: string) => void;
+    /** A step yielded (reached an input request / quit) without hitting a step boundary. */
+    onStepYielded?:          () => void;
     private pendingPropReads = new Map<number, (value: number | number[] | null) => void>();
     private pendingWordReads = new Map<number, (value: number | null) => void>();
     private pendingWrites    = new Map<number, (ok: boolean) => void>();
@@ -135,6 +137,8 @@ export class DebugPanel {
                     this.onBreak(msg.addr, msg.vmState ?? { frames: [], globals: {} });
                 } else if (msg.type === 'step' && msg.addr !== undefined) {
                     this.onStep(msg.addr, msg.vmState ?? { frames: [], globals: {} });
+                } else if (msg.type === 'stepYielded') {
+                    if (this.onStepYielded) { this.onStepYielded(); }
                 } else if (msg.type === 'stop') {
                     this.panel.dispose();
                 } else if (msg.type === 'propertyResult' && msg.reqId !== undefined) {
@@ -455,6 +459,13 @@ ${isZMachine ? `<script src="${zvmJs}"></script><script src="${zvmDbgJs}"></scri
                 window._bglZvmInstance._bglContinue();
             } else {
                 Quixe.resume();
+            }
+            /* If the step ran but did NOT land on a step boundary, the VM yielded — it reached an
+             * input request (glk_select) or quit. _bglOnStep never fired, so without this the
+             * extension waits forever for a step-stop that will not come ("stopped responding").
+             * Tell it so it can regain control. */
+            if (!window._bglIsPaused) {
+                vscode.postMessage({ type: 'stepYielded' });
             }
 
         } else if (msg.type === 'readProperty') {

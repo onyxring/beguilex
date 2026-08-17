@@ -268,6 +268,39 @@ function multiCandidate(): void {
     fs.rmSync(dir, { recursive: true, force: true });
 }
 
+// ── multi-file-index: a library .h re-entered by I6 owns several <given-path> ──
+// entries (file-indexes); only ONE carries the sequence-points. A path→addr lookup
+// that matches a single index drops the code → library breakpoints never bind.
+// (Root cause of WW3's "breakpoint in __orPlayHooks doesn't trigger", 2026-08-16.)
+function multiFileIndex(): void {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bglidx-'));
+    const bgldbg = path.join(dir, 't.bgldbg');
+    const dbg    = path.join(dir, 't.inf.dbg');
+    const lib    = path.join(dir, 'lib.h');
+    fs.writeFileSync(bgldbg, ['[map]', '[sym]', '[types]', ''].join('\n'));
+    // lib.h appears TWICE (indexes 1 and 2). Only index 2 carries the seq-point at line 42;
+    // index 1 (the first re-entry) has none — exactly the WW3 .dbg shape.
+    fs.writeFileSync(dbg,
+        '<given-path>t.inf</given-path>\n' +          // index 0 (main)
+        '<given-path>lib.h</given-path>\n' +          // index 1 — no seq-points
+        '<given-path>lib.h</given-path>\n' +          // index 2 — carries the code
+        '<sequence-point><address>200</address><file-index>2</file-index><line>42</line></sequence-point>\n' +
+        '<sequence-point><address>208</address><file-index>2</file-index><line>44</line></sequence-point>\n');
+
+    const di = DebugInfo.load(bgldbg, dbg);
+    // Pre-fix: vmAddrsForInfLine matched only the FIRST index (1, empty) → [] → BP never binds.
+    ok(di.vmAddrsForInfLine(42, lib).includes(200),
+       'multi-index: breakpoint on a library line whose code lives under a later file-index binds');
+    ok(di.vmAddrsForInfLine(44, lib).includes(208),
+       'multi-index: a second line in the re-entered file also binds');
+    // vmAddrsForInfFile (I6 step-over stop set) must union all indexes too.
+    const fileAddrs = di.vmAddrsForInfFile(lib);
+    ok(fileAddrs.includes(200) && fileAddrs.includes(208),
+       'multi-index: vmAddrsForInfFile unions all indexes of the physical file');
+
+    fs.rmSync(dir, { recursive: true, force: true });
+}
+
 // ── run ──────────────────────────────────────────────────────────────────────
 function main(): void {
     sweep('superposed');
@@ -276,6 +309,7 @@ function main(): void {
     variableTypes();
     variablePresentation();
     multiCandidate();
+    multiFileIndex();
 
     const total = passed + failures.length;
     console.log(`\ndebug-map harness: ${passed}/${total} checks passed`);

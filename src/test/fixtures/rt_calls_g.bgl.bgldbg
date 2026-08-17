@@ -125,15 +125,22 @@
 215	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	385
 27	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	141
 219	/Users/jim/projects/IF-Projects/beguiler/beguiLib/bglWorld.bgl	44
-222	/private/var/folders/7v/6j9qk1gx5mgdnwmpnfn5v2nr0000gn/T/tmp.yHVcyYScbR/locals.bgl	4
-223	/private/var/folders/7v/6j9qk1gx5mgdnwmpnfn5v2nr0000gn/T/tmp.yHVcyYScbR/locals.bgl	5
-224	/private/var/folders/7v/6j9qk1gx5mgdnwmpnfn5v2nr0000gn/T/tmp.yHVcyYScbR/locals.bgl	6
-222	/private/var/folders/7v/6j9qk1gx5mgdnwmpnfn5v2nr0000gn/T/tmp.yHVcyYScbR/locals.bgl	4
-226	/private/var/folders/7v/6j9qk1gx5mgdnwmpnfn5v2nr0000gn/T/tmp.yHVcyYScbR/locals.bgl	8
-227	/private/var/folders/7v/6j9qk1gx5mgdnwmpnfn5v2nr0000gn/T/tmp.yHVcyYScbR/locals.bgl	9
-228	/private/var/folders/7v/6j9qk1gx5mgdnwmpnfn5v2nr0000gn/T/tmp.yHVcyYScbR/locals.bgl	10
-229	/private/var/folders/7v/6j9qk1gx5mgdnwmpnfn5v2nr0000gn/T/tmp.yHVcyYScbR/locals.bgl	11
-226	/private/var/folders/7v/6j9qk1gx5mgdnwmpnfn5v2nr0000gn/T/tmp.yHVcyYScbR/locals.bgl	8
+222	/private/var/folders/7v/6j9qk1gx5mgdnwmpnfn5v2nr0000gn/T/tmp.yHVcyYScbR/rt_calls_g.bgl	4
+223	/private/var/folders/7v/6j9qk1gx5mgdnwmpnfn5v2nr0000gn/T/tmp.yHVcyYScbR/rt_calls_g.bgl	5
+224	/private/var/folders/7v/6j9qk1gx5mgdnwmpnfn5v2nr0000gn/T/tmp.yHVcyYScbR/rt_calls_g.bgl	6
+222	/private/var/folders/7v/6j9qk1gx5mgdnwmpnfn5v2nr0000gn/T/tmp.yHVcyYScbR/rt_calls_g.bgl	4
+226	/private/var/folders/7v/6j9qk1gx5mgdnwmpnfn5v2nr0000gn/T/tmp.yHVcyYScbR/rt_calls_g.bgl	8
+227	/private/var/folders/7v/6j9qk1gx5mgdnwmpnfn5v2nr0000gn/T/tmp.yHVcyYScbR/rt_calls_g.bgl	9
+228	/private/var/folders/7v/6j9qk1gx5mgdnwmpnfn5v2nr0000gn/T/tmp.yHVcyYScbR/rt_calls_g.bgl	9
+230	/private/var/folders/7v/6j9qk1gx5mgdnwmpnfn5v2nr0000gn/T/tmp.yHVcyYScbR/rt_calls_g.bgl	10
+226	/private/var/folders/7v/6j9qk1gx5mgdnwmpnfn5v2nr0000gn/T/tmp.yHVcyYScbR/rt_calls_g.bgl	8
+232	/private/var/folders/7v/6j9qk1gx5mgdnwmpnfn5v2nr0000gn/T/tmp.yHVcyYScbR/rt_calls_g.bgl	12
+233	/private/var/folders/7v/6j9qk1gx5mgdnwmpnfn5v2nr0000gn/T/tmp.yHVcyYScbR/rt_calls_g.bgl	13
+234	/private/var/folders/7v/6j9qk1gx5mgdnwmpnfn5v2nr0000gn/T/tmp.yHVcyYScbR/rt_calls_g.bgl	14
+235	/private/var/folders/7v/6j9qk1gx5mgdnwmpnfn5v2nr0000gn/T/tmp.yHVcyYScbR/rt_calls_g.bgl	15
+236	/private/var/folders/7v/6j9qk1gx5mgdnwmpnfn5v2nr0000gn/T/tmp.yHVcyYScbR/rt_calls_g.bgl	16
+237	/private/var/folders/7v/6j9qk1gx5mgdnwmpnfn5v2nr0000gn/T/tmp.yHVcyYScbR/rt_calls_g.bgl	17
+232	/private/var/folders/7v/6j9qk1gx5mgdnwmpnfn5v2nr0000gn/T/tmp.yHVcyYScbR/rt_calls_g.bgl	12
 [sym]
 _glulx	_glulx	object
 _glulx.ewintype	ewintype	property
@@ -152,7 +159,8 @@ bgl.world	world	property
 _bglarraycompareasc	_bglarraycompareasc	function
 _bglarray	_bglarray	object
 _bglworldbufidx	_bglworldbufidx	global
-mix	mix	function
+add	add	function
+fib	fib	function
 initialise	initialise	function
 no_attribute	no_attribute	global
 sp	sp	global
@@ -382,12 +390,16 @@ routine _bglworldinparent
   local buf array slot
   local o object slot
   local n int slot
-routine mix
-  local p int slot
-  local q int slot
+routine add
+  local a int slot
+  local b int slot
+  local s int slot
+routine fib
+  local n int slot
 routine initialise
   local x int slot
-  local z int slot
+  local y int slot
+  local f int slot
 global no_attribute attribute
 global _bglvowels bytearray
 global _bglui _bglobject

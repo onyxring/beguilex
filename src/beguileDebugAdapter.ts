@@ -12,6 +12,7 @@
 import * as vscode from 'vscode';
 import * as nodePath from 'path';
 import { DebugInfo, BglLocation } from './debugInfo';
+import { computeStep, routeBreak } from './debugStepLogic';
 
 interface VmFrame  { funcAddr: number; returnPC: number; locals: { [frameOffset: number]: number } }
 interface VmState  { frames: VmFrame[]; globals: { [address: number]: number } }
@@ -90,6 +91,8 @@ export class BeguileDebugAdapter implements vscode.DebugAdapter {
     private varFilter = '';
     private lastStopReason = 'breakpoint';
     private lastStepCommand: string | undefined;
+    /** Whether the in-flight step was initiated in I6/library mode (governs onVmBreak auto-step). */
+    private stepInitiatedI6Mode = false;
     private stepOriginRoutine: any | undefined;  // routine at step-over start (for call-depth check)
 
     public setVarFilter(filter: string): void {
@@ -148,6 +151,14 @@ export class BeguileDebugAdapter implements vscode.DebugAdapter {
                     (addr: number, vmState: VmState) => this.onVmBreak(addr, true, vmState),
                     (col) => this.onPanelClosed(col)
                 );
+                // A step ran into an input request (glk_select) or quit — the VM yielded without a
+                // step boundary. Regain control so the debugger doesn't hang: surface it as stopped
+                // (the game is waiting for input; the user can Continue to play, or step again).
+                this.panel.onStepYielded = () => {
+                    this.lastStopReason = 'step';
+                    this.sendEvent('stopped', { reason: 'step', threadId: 1, allThreadsStopped: true,
+                        description: 'Program is waiting for input — press Continue to play, or step again.' });
+                };
                 // Mirror game text output to the Debug Console in real-time
                 this.panel.onDebugOutput = (text: string) => {
                     if (vscode.workspace.getConfiguration('Beguilex').get<boolean>('debugConsoleOutput')) {
@@ -295,7 +306,10 @@ export class BeguileDebugAdapter implements vscode.DebugAdapter {
                 for (let i = vmFrames.length - 1; i >= 0; i--) {
                     const vmf     = vmFrames[i];
                     const frameId = vmFrames.length - 1 - i; // 0 = innermost
-                    const routine = this.debugInfo?.routineByAddr(vmf.funcAddr);
+                    // Quixe sets funcAddr = routine start; ZVM sets it = current pc — so fall back
+                    // to routineContaining, or the frame name shows as a hex address on ZVM.
+                    const routine = this.debugInfo?.routineByAddr(vmf.funcAddr)
+                                 ?? this.debugInfo?.routineContaining(vmf.funcAddr);
                     const name    = routine?.name ?? `0x${vmf.funcAddr.toString(16)}`;
 
                     let bglLoc: BglLocation | undefined;
@@ -305,9 +319,24 @@ export class BeguileDebugAdapter implements vscode.DebugAdapter {
                             bglLoc = { file: this.currentBglFile, line: this.currentBglLine };
                         }
                         infLoc = this.currentInfLocation;
-                    } else if (vmf.returnPC && this.debugInfo) {
-                        bglLoc = this.debugInfo.vmAddrToBgl(vmf.returnPC);
-                        infLoc = this.debugInfo.vmAddrToInfLocation(vmf.returnPC);
+                    } else if (this.debugInfo) {
+                        // Prefer the EXACT call site: the frame's return PC (now read correctly from
+                        // the Glulx call stub) resolved to its nearest mapped line. `vmAddrToBglNearest`
+                        // is bounded to the containing routine and returns nothing for a bogus PC, so a
+                        // bad value can't send the click to the wrong file. Fall back to the routine's
+                        // entry line (from the reliable funcAddr) when there's no usable return PC —
+                        // e.g. ZVM, whose state hook exposes returnPC=0.
+                        if (vmf.returnPC) {
+                            bglLoc = this.debugInfo.vmAddrToBglNearest(vmf.returnPC);
+                            infLoc = this.debugInfo.vmAddrToInfLocation(vmf.returnPC);
+                        }
+                        if (!bglLoc && !infLoc && vmf.funcAddr) {
+                            const entry = this.debugInfo.routineEntryAddr(vmf.funcAddr);
+                            if (entry !== undefined) {
+                                bglLoc = this.debugInfo.vmAddrToBgl(entry);
+                                infLoc = this.debugInfo.vmAddrToInfLocation(entry);
+                            }
+                        }
                     }
 
                     const src = resolveSource(bglLoc, infLoc, frameId === 0);
@@ -683,55 +712,28 @@ export class BeguileDebugAdapter implements vscode.DebugAdapter {
                 this.stepOriginRoutine = this.currentVmAddr !== undefined
                     ? this.debugInfo?.routineContaining(this.currentVmAddr) : undefined;
 
-                let skipAddrs: number[] = [];
-                let stopAddrs: number[] = [];
-                let seqPts: number[] | undefined;
-
+                let plan = { skipAddrs: [] as number[], stopAddrs: [] as number[], seqPts: [] as number[] };
                 if (this.debugInfo) {
-                    const infLoc = this.currentVmAddr !== undefined
-                        ? this.debugInfo.vmAddrToInfLocation(this.currentVmAddr)
-                        : undefined;
-                    const mainInfPath = this.config.infPath;
                     const mainInfOpen = vscode.window.visibleTextEditors.some(
-                        e => e.document.uri.fsPath === mainInfPath
+                        e => e.document.uri.fsPath === this.config.infPath
                     );
-                    const atInfOnly = !!infLoc && !this.currentBglFile;
-
-                    if (mainInfOpen || atInfOnly) {
-                        // I6 mode: send seqPts to trigger JIT block injection
-                        seqPts = this.debugInfo.allVmAddrs();
-                        skipAddrs = infLoc
-                            ? this.debugInfo.vmAddrsForInfLine(infLoc.line, infLoc.path)
-                            : ((this.currentBglFile && this.currentBglLine !== undefined)
-                                ? this.debugInfo.bglToVmAddrs(this.currentBglFile, this.currentBglLine)
-                                : []);
-                        if (message.command === 'next') {
-                            // Step over: stop at any sequence point. Cross-file calls
-                            // are handled by auto-step in onVmBreak (skips called functions,
-                            // but allows returns to the caller). Same-line stops are
-                            // handled by same-line auto-step in onVmBreak.
-                            stopAddrs = this.debugInfo.allVmAddrs();
-                        } else if (message.command === 'stepOut' && infLoc) {
-                            // Step out: stop at first address outside the current .inf file.
-                            const currentFileAddrs = new Set(this.debugInfo.vmAddrsForInfFile(infLoc.path));
-                            stopAddrs = this.debugInfo.allVmAddrs().filter(a => !currentFileAddrs.has(a));
-                        } else {
-                            // Step into: stop at any sequence point.
-                            stopAddrs = this.debugInfo.allVmAddrs();
-                        }
-                    } else {
-                        // Coarse .bgl mode: use mapped addrs for both stop and seqPts.
-                        // seqPts = mapped addrs ensures JIT blocks split at .bgl lines
-                        // (without this, multi-line blocks skip intermediate lines).
-                        skipAddrs = (this.currentBglFile && this.currentBglLine !== undefined)
-                            ? this.debugInfo.bglToVmAddrs(this.currentBglFile, this.currentBglLine)
-                            : [];
-                        stopAddrs = this.debugInfo.allMappedVmAddrs();
-                        seqPts = this.debugInfo.allMappedVmAddrs();
-                    }
+                    // Remember whether THIS step was initiated in I6/library mode — onVmBreak uses it
+                    // to decide whether to auto-step past unmapped addrs (.bgl mode) or stop on the
+                    // .inf line (I6 mode). It must reflect the step's origin, not break-time editor state.
+                    const stepInfLoc = this.currentVmAddr !== undefined
+                        ? this.debugInfo.vmAddrToInfLocation(this.currentVmAddr) : undefined;
+                    this.stepInitiatedI6Mode = mainInfOpen || (!!stepInfLoc && !this.currentBglFile);
+                    plan = computeStep({
+                        command: message.command as 'next' | 'stepIn' | 'stepOut',
+                        currentVmAddr:  this.currentVmAddr,
+                        currentBglFile: this.currentBglFile,
+                        currentBglLine: this.currentBglLine,
+                        frames: this.currentVmState?.frames ?? [],
+                        mainInfOpen,
+                        di: this.debugInfo,
+                    });
                 }
-
-                this.panel?.sendStep(skipAddrs, stopAddrs, seqPts);
+                this.panel?.sendStep(plan.skipAddrs, plan.stopAddrs, plan.seqPts);
                 this.respond(message, {});
                 break;
             }
@@ -785,60 +787,24 @@ export class BeguileDebugAdapter implements vscode.DebugAdapter {
             this.currentBglFile = loc?.file;
             this.currentBglLine = loc?.line;
 
-            // Step-over call detection: if we landed at the ENTRY of a different
-            // routine, we entered a function call — auto-step past it.
-            // If we're MID-routine in a different function, we RETURNED from
-            // the origin — stop and show the caller's line.
-            if (isStep && loc && this.lastStepCommand === 'next' && this.stepOriginRoutine) {
-                const newRoutine = this.debugInfo.routineContaining(vmAddr);
-                if (newRoutine && newRoutine !== this.stepOriginRoutine) {
-                    // We're in a different routine. Find the next mapped address
-                    // in the ORIGIN routine (the return point after the call) and
-                    // continue to it — this is how traditional step-over works.
-                    const originStart = this.stepOriginRoutine.startAddr;
-                    const originEnd   = this.stepOriginRoutine.endAddr;
-                    const mappedAddrs = this.debugInfo.allMappedVmAddrs();
-                    const returnAddrs = mappedAddrs.filter(
-                        a => a >= originStart && a < originEnd
-                    );
-                    if (returnAddrs.length > 0) {
-                        this.panel?.sendStep([vmAddr], returnAddrs, mappedAddrs);
-                        return;
-                    }
-                    // No mapped addrs in origin routine — fall through and show
-                }
-            }
-
-            if (isStep && !loc) {
-                const infLoc2 = this.debugInfo.vmAddrToInfLocation(vmAddr);
-                const mainInfPath = this.config.infPath;
-                const visiblePaths = vscode.window.visibleTextEditors.map(e => e.document.uri.fsPath);
-                const inI6Mode = visiblePaths.some(
-                    p => p === mainInfPath || (infLoc2 && p === infLoc2.path)
-                );
-                const showTarget = this.lastStepCommand === 'stepIn' || this.lastStepCommand === 'stepOut';
-                dbgLog(`unmapped step @ 0x${vmAddr.toString(16)} inI6=${inI6Mode} show=${showTarget}`);
-
-                if (!inI6Mode && !showTarget) {
-                    dbgLog(`  auto-step to bgl`);
-                    const mappedAddrs = this.debugInfo.allMappedVmAddrs();
-                    this.panel?.sendStep([vmAddr], mappedAddrs, this.debugInfo.allVmAddrs());
-                    return;
-                }
-            }
-
-            const infLoc = this.debugInfo.vmAddrToInfLocation(vmAddr);
-
-            // Same-line auto-step: one I6 line may compile to multiple Z-machine
-            // instructions. Skip duplicate stops on the same line during step-over.
-            if (isStep && this.lastStepCommand === 'next' && infLoc && this.currentInfLocation &&
-                infLoc.path === this.currentInfLocation.path &&
-                infLoc.line === this.currentInfLocation.line) {
-                const skipAddrs = this.debugInfo.vmAddrsForInfLine(infLoc.line, infLoc.path);
-                this.panel?.sendStep(skipAddrs, this.debugInfo.allVmAddrs(), this.debugInfo.allVmAddrs());
+            // Decide stop-vs-auto-step via the shared, harness-tested logic.
+            const action = routeBreak({
+                vmAddr, isStep,
+                frames: vmState.frames ?? [],
+                lastStepCommand: this.lastStepCommand as 'next' | 'stepIn' | 'stepOut' | undefined,
+                stepOriginRoutine: this.stepOriginRoutine,
+                // Governs the "auto-step past unmapped → next .bgl line" fallback: only for a
+                // .bgl-mode step. An I6/library-mode step must stop on the .inf line instead.
+                inI6Mode: this.stepInitiatedI6Mode,
+                currentInfLocation: this.currentInfLocation,
+                di: this.debugInfo,
+            });
+            if (action.kind === 'autostep') {
+                this.panel?.sendStep(action.skipAddrs, action.stopAddrs, action.seqPts);
                 return;
             }
 
+            const infLoc = this.debugInfo.vmAddrToInfLocation(vmAddr);
             this.currentInfLocation = infLoc;
             this.currentInfLine = infLoc?.line;
             if (infLoc) {

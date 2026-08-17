@@ -279,13 +279,32 @@
         var inst = window._bglZvmInstance;
         if (!inst || !inst.m) { return { frames: [], globals: {} }; }
 
-        /* Locals live in inst.l[] (0-indexed, 16-bit Z-machine values).
-         * Key by byte-offset (each local = 2 bytes) to match .dbg entries. */
-        var locs = {};
-        if (inst.l) {
-            for (var i = 0; i < inst.l.length; i++) { locs[i * 2] = inst.l[i]; }
+        /* Walk the Z-machine call stack (ifvms). `inst.frames` holds the caller frame-pointers
+         * (oldest first); `inst.frameptr` is the current frame. Each frame's header stores, at
+         * getUint32(fp) >>> 8, the address where THAT frame resumes when it returns (i.e. the call
+         * site in its parent). So a caller frame's own execution point (call site) = the return
+         * address stored in its CHILD's header; the innermost frame's is inst.pc.
+         *
+         * We match the Quixe model: frames bottom→top (outermost first); each frame's `returnPC`
+         * is its own call site (where it's blocked), and the innermost (active) frame's is 0.
+         * funcAddr = the frame's current instruction, so routineContaining() resolves its routine. */
+        var framePtrs = [];
+        if (inst.frames) { for (var fi = 0; fi < inst.frames.length; fi++) { framePtrs.push(inst.frames[fi]); } }
+        framePtrs.push(inst.frameptr);
+        var n = framePtrs.length;
+        var frames = [];
+        for (var i = 0; i < n; i++) {
+            var innermost = (i === n - 1);
+            var execPC = inst.pc || 0;
+            if (!innermost) {
+                try { execPC = (inst.stack.getUint32(framePtrs[i + 1]) >>> 8); } catch (e) { execPC = 0; }
+            }
+            var locs = {};
+            if (innermost && inst.l) {   /* only the current frame's locals are directly available */
+                for (var j = 0; j < inst.l.length; j++) { locs[j * 2] = inst.l[j]; }
+            }
+            frames.push({ funcAddr: execPC, returnPC: innermost ? 0 : execPC, locals: locs });
         }
-        var frames = [{ funcAddr: inst.pc || 0, returnPC: 0, locals: locs }];
 
         /* Globals: Z-machine globals are 16-bit values at their memory addresses. */
         var globals = {};

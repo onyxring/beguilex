@@ -13,10 +13,13 @@ window._bglGetVmState=function(){
           _locs[_p]=_frm.locals[_p]|0;
         }
       }
-      /* returnPC: the call stub pushed by this frame when it called the next
-         one is at the top of this frame's value stack (Glulx call stub format:
-         desttype, destaddr, returnPC — so returnPC is the last pushed = top). */
-      var _retPC=(_frm.valstack&&_frm.valstack.length>=3)?_frm.valstack[_frm.valstack.length-1]:0;
+      /* returnPC = the caller's resume address (its call site). When a frame has called a
+         child, a Glulx call stub sits on top of its valstack. Per pop_callstub the stub is
+         4 words [desttype, destaddr, PC, framestart] — so the return PC is at len-2, and
+         framestart (== _frm.framestart) is on top at len-1. (The old code read len-1, i.e.
+         the frame pointer, not the PC — which resolved frame clicks to the wrong routine.) */
+      var _vs=_frm.valstack, _retPC=0;
+      if(_vs&&_vs.length>=4&&_vs[_vs.length-1]===_frm.framestart){ _retPC=_vs[_vs.length-2]; }
       _frames.push({funcAddr:_frm.vmfunc?_frm.vmfunc.funcaddr:0,returnPC:_retPC,locals:_locs});
     }
   }

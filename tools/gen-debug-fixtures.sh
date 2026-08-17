@@ -24,7 +24,13 @@ gen() {  # $1=fixture-name  $2=beguile-source
   cp "$out/$stem.bgl.bgldbg"             "$FIX/$name.bgl.bgldbg"
   cp "$out/$stem.bgl.transpiled.inf"     "$FIX/$name.bgl.transpiled.inf"
   cp "$out/$stem.bgl.transpiled.inf.dbg" "$FIX/$name.bgl.transpiled.inf.dbg"
-  echo "  ✓ $name"
+  # Story file (for the RUNTIME harness): copy whichever the target produced (.z8 / .ulx).
+  rm -f "$FIX/$name.z8" "$FIX/$name.ulx"
+  local story=""
+  for ext in z8 ulx zblorb; do
+    if [ -f "$out/$stem.$ext" ]; then story="$out/$stem.$ext"; cp "$story" "$FIX/$name.$ext"; break; fi
+  done
+  echo "  ✓ $name${story:+ (+$(basename "$story"|sed 's/.*\.//') story)}"
 }
 
 # superposed: exercises a superposed core routine (bgl.util.math) — the anchor-bug regression target.
@@ -92,5 +98,33 @@ void initialise(){ print(spill(7)); }
 #includeI6 "grammar"
 EOF
 gen spillz "$TMP/spillz.bgl"
+
+# rt_calls: calls + recursion + known locals — the runtime harness's step-in/out + values workhorse.
+# Built to BOTH targets (rt_calls_z = Z8, rt_calls_g = Glulx) for the parametrized runtime harness.
+rt_body() {  # $1 = target
+cat <<EOF
+#beguilerSettings { target=$1; title="RtCalls"; includePaths ="$LIB_I6"; }
+#includeI6 "parser"
+#includeI6 "verblib"
+int add(int a, int b){
+    int s = a + b;
+    return s;
+}
+int fib(int n){
+    if (n < 2){ return n; }
+    return fib(n - 1) + fib(n - 2);
+}
+void initialise(){
+    int x = 5;
+    int y = add(x, 3);
+    int f = fib(6);
+    print(y);
+    print(f);
+}
+#includeI6 "grammar"
+EOF
+}
+rt_body Z8    > "$TMP/rt_calls_z.bgl"; gen rt_calls_z "$TMP/rt_calls_z.bgl"
+rt_body Glulx > "$TMP/rt_calls_g.bgl"; gen rt_calls_g "$TMP/rt_calls_g.bgl"
 
 echo "fixtures regenerated in $FIX"

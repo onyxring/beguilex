@@ -1,7 +1,7 @@
 [map]
 9	/Users/jim/projects/IF-Projects/beguiler/beguiLib/core/__beguileCore.bgl	203
 13	/Users/jim/projects/IF-Projects/beguiler/beguiLib/core/_attribute.bgl	23
-14	/Users/jim/projects/IF-Projects/beguiler/beguiLib/core/_glulxCore.bgl	18
+14	/Users/jim/projects/IF-Projects/beguiler/beguiLib/core/_zcodeCore.bgl	17
 16	/Users/jim/projects/IF-Projects/beguiler/beguiLib/core/__beguileCore.bgl	49
 19	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	33
 20	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	34
@@ -125,82 +125,44 @@
 215	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	385
 27	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	141
 219	/Users/jim/projects/IF-Projects/beguiler/beguiLib/bglWorld.bgl	44
-222	/private/var/folders/7v/6j9qk1gx5mgdnwmpnfn5v2nr0000gn/T/tmp.yHVcyYScbR/locals.bgl	4
-223	/private/var/folders/7v/6j9qk1gx5mgdnwmpnfn5v2nr0000gn/T/tmp.yHVcyYScbR/locals.bgl	5
-224	/private/var/folders/7v/6j9qk1gx5mgdnwmpnfn5v2nr0000gn/T/tmp.yHVcyYScbR/locals.bgl	6
-222	/private/var/folders/7v/6j9qk1gx5mgdnwmpnfn5v2nr0000gn/T/tmp.yHVcyYScbR/locals.bgl	4
-226	/private/var/folders/7v/6j9qk1gx5mgdnwmpnfn5v2nr0000gn/T/tmp.yHVcyYScbR/locals.bgl	8
-227	/private/var/folders/7v/6j9qk1gx5mgdnwmpnfn5v2nr0000gn/T/tmp.yHVcyYScbR/locals.bgl	9
-228	/private/var/folders/7v/6j9qk1gx5mgdnwmpnfn5v2nr0000gn/T/tmp.yHVcyYScbR/locals.bgl	10
-229	/private/var/folders/7v/6j9qk1gx5mgdnwmpnfn5v2nr0000gn/T/tmp.yHVcyYScbR/locals.bgl	11
-226	/private/var/folders/7v/6j9qk1gx5mgdnwmpnfn5v2nr0000gn/T/tmp.yHVcyYScbR/locals.bgl	8
+222	/private/var/folders/7v/6j9qk1gx5mgdnwmpnfn5v2nr0000gn/T/tmp.yHVcyYScbR/rt_calls_z.bgl	4
+223	/private/var/folders/7v/6j9qk1gx5mgdnwmpnfn5v2nr0000gn/T/tmp.yHVcyYScbR/rt_calls_z.bgl	5
+224	/private/var/folders/7v/6j9qk1gx5mgdnwmpnfn5v2nr0000gn/T/tmp.yHVcyYScbR/rt_calls_z.bgl	6
+222	/private/var/folders/7v/6j9qk1gx5mgdnwmpnfn5v2nr0000gn/T/tmp.yHVcyYScbR/rt_calls_z.bgl	4
+226	/private/var/folders/7v/6j9qk1gx5mgdnwmpnfn5v2nr0000gn/T/tmp.yHVcyYScbR/rt_calls_z.bgl	8
+227	/private/var/folders/7v/6j9qk1gx5mgdnwmpnfn5v2nr0000gn/T/tmp.yHVcyYScbR/rt_calls_z.bgl	9
+228	/private/var/folders/7v/6j9qk1gx5mgdnwmpnfn5v2nr0000gn/T/tmp.yHVcyYScbR/rt_calls_z.bgl	9
+230	/private/var/folders/7v/6j9qk1gx5mgdnwmpnfn5v2nr0000gn/T/tmp.yHVcyYScbR/rt_calls_z.bgl	10
+226	/private/var/folders/7v/6j9qk1gx5mgdnwmpnfn5v2nr0000gn/T/tmp.yHVcyYScbR/rt_calls_z.bgl	8
+232	/private/var/folders/7v/6j9qk1gx5mgdnwmpnfn5v2nr0000gn/T/tmp.yHVcyYScbR/rt_calls_z.bgl	12
+233	/private/var/folders/7v/6j9qk1gx5mgdnwmpnfn5v2nr0000gn/T/tmp.yHVcyYScbR/rt_calls_z.bgl	13
+234	/private/var/folders/7v/6j9qk1gx5mgdnwmpnfn5v2nr0000gn/T/tmp.yHVcyYScbR/rt_calls_z.bgl	14
+235	/private/var/folders/7v/6j9qk1gx5mgdnwmpnfn5v2nr0000gn/T/tmp.yHVcyYScbR/rt_calls_z.bgl	15
+236	/private/var/folders/7v/6j9qk1gx5mgdnwmpnfn5v2nr0000gn/T/tmp.yHVcyYScbR/rt_calls_z.bgl	16
+237	/private/var/folders/7v/6j9qk1gx5mgdnwmpnfn5v2nr0000gn/T/tmp.yHVcyYScbR/rt_calls_z.bgl	17
+232	/private/var/folders/7v/6j9qk1gx5mgdnwmpnfn5v2nr0000gn/T/tmp.yHVcyYScbR/rt_calls_z.bgl	12
 [sym]
-_glulx	_glulx	object
-_glulx.ewintype	ewintype	property
-_glulx.eimgalign	eimgalign	property
-_glulx.eimgdimension	eimgdimension	property
-_glulx.bwinborder	bwinborder	property
-_glulx.bwinplacement	bwinplacement	property
-_glulx.bwinscale	bwinscale	property
-_glulx.estyletype	estyletype	property
+_zcode	_zcode	object
 bgl	bgl	object
 bgl.ui	ui	property
-bgl.glulx	glulx	property
+bgl.zcode	zcode	property
 bgl.asm	asm	property
 bgl.util	util	property
 bgl.world	world	property
 _bglarraycompareasc	_bglarraycompareasc	function
 _bglarray	_bglarray	object
 _bglworldbufidx	_bglworldbufidx	global
-mix	mix	function
+add	add	function
+fib	fib	function
 initialise	initialise	function
 no_attribute	no_attribute	global
-sp	sp	global
 [types]
-enum bglulxwindowmethodflags
-enum eglulxwindowtype
-  value textgrid 4
-  value textbuffer 3
-  value graphics 5
-enum eglulximagealign
-  value inlineup 1
-  value inlinedown 2
-  value inlinecenter 3
-  value marginleft 4
-  value marginright 5
-  value margincenter 6
-enum bglulxwindowborder
-  value border 0
-  value noborder 256
-enum bglulxwindowplacement
-  value left 0
-  value right 1
-  value above 2
-  value below 3
-enum bglulxwindowscale
-  value fixed 16
-  value proportional 32
-enum eglulximagedimension
-  value original -1
-  value scaled -2
-enum eglulxstyletype
-  value normal 1
-  value emphasized 2
-  value fixed 3
-  value header 4
-  value subheader 5
-  value alert 6
-  value note 7
-  value blockquote 8
-  value input 9
-  value user1 10
-  value user2 11
 type verb
   prop grammar grammar grammarrulelist
   prop meta meta bool
   prop priority priority int
 type bgl
-  prop glulx glulx _glulx
+  prop zcode zcode _zcode
 routine _bglunsignedcompare
   local x int slot
   local y int slot
@@ -266,98 +228,6 @@ routine _bglchartolower
   local c char slot
 routine _bglchartoupper
   local c char slot
-routine __glkhook
-  local _vararg_count int slot
-  local api int slot
-  local args int slot
-  local retval int slot
-routine _bglfloatfadd
-  local x float slot
-  local y float slot
-  local r float slot
-routine _bglfloatfsub
-  local x float slot
-  local y float slot
-  local r float slot
-routine _bglfloatfmul
-  local x float slot
-  local y float slot
-  local r float slot
-routine _bglfloatfdiv
-  local x float slot
-  local y float slot
-  local r float slot
-routine _bglfloatfmod
-  local x float slot
-  local y float slot
-  local r float slot
-routine _bglfloatnumtof
-  local n int slot
-  local r float slot
-routine _bglfloatftonumz
-  local f float slot
-  local r int slot
-routine _bglfloatsqrt
-  local v float slot
-  local r float slot
-routine _bglfloatexp
-  local v float slot
-  local r float slot
-routine _bglfloatlog
-  local v float slot
-  local r float slot
-routine _bglfloatpow
-  local a float slot
-  local b float slot
-  local r float slot
-routine _bglfloatsin
-  local v float slot
-  local r float slot
-routine _bglfloatcos
-  local v float slot
-  local r float slot
-routine _bglfloattan
-  local v float slot
-  local r float slot
-routine _bglfloatasin
-  local v float slot
-  local r float slot
-routine _bglfloatacos
-  local v float slot
-  local r float slot
-routine _bglfloatatan
-  local v float slot
-  local r float slot
-routine _bglfloatatan2
-  local y float slot
-  local x float slot
-  local r float slot
-routine _bglfloatceil
-  local v float slot
-  local r float slot
-routine _bglfloatfloor
-  local v float slot
-  local r float slot
-routine _bglfloatabs
-  local v float slot
-routine _bglfloatlt
-  local x float slot
-  local y float slot
-routine _bglfloatle
-  local x float slot
-  local y float slot
-routine _bglfloatgt
-  local x float slot
-  local y float slot
-routine _bglfloatge
-  local x float slot
-  local y float slot
-routine _bglfloatprintdecimal
-  local v float slot
-  local isneg bool slot
-  local ipart int slot
-  local frac float slot
-  local fdigits int slot
 routine _bglarraycompareasc
   local lhs var slot
   local rhs var slot
@@ -382,17 +252,20 @@ routine _bglworldinparent
   local buf array slot
   local o object slot
   local n int slot
-routine mix
-  local p int slot
-  local q int slot
+routine add
+  local a int slot
+  local b int slot
+  local s int slot
+routine fib
+  local n int slot
 routine initialise
   local x int slot
-  local z int slot
+  local y int slot
+  local f int slot
 global no_attribute attribute
 global _bglvowels bytearray
 global _bglui _bglobject
-global sp var
-global _glulx _bglobject
+global _zcode _bglobject
 global _bglutil _bglobject
 global bgl _bglobject
 global _bglarray object
