@@ -2,3 +2,13 @@
 src/test/**
 out/test/**
 tools/**
+
+# Internal / dev-only docs — never ship in the extension package.
+CLAUDE.md
+claude.md
+TODOs.md
+OPERATION_*.md
+.design/**
+
+# GitHub repo metadata — not needed inside the .vsix.
+.github/**
