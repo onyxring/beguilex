@@ -271,7 +271,13 @@
     },
     "configurationDefaults": {
       "[beguile]": {
-        "editor.semanticHighlighting.enabled": true
+        "editor.semanticHighlighting.enabled": true,
+        "editor.unicodeHighlight.allowedCharacters": {
+          "‘": true,
+          "’": true,
+          "“": true,
+          "”": true
+        }
       }
     },
     "semanticTokenScopes": [
