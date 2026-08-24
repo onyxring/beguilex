@@ -358,7 +358,7 @@
     "keywords-declaration": {
       "comment": "Case-insensitive.",
       "name": "storage.modifier.beguile",
-      "match": "(?i)\\b(byVal|extern|extend|emitter|replace|const|alias|ref|readonly|static|explicit|default|superposed|additive)\\b"
+      "match": "(?i)\\b(byVal|extern|extend|emitter|replace|const|alias|ref|readonly|static|explicit|default|superposed|additive|inline)\\b"
     },
 
     "keywords-type-declaration": {

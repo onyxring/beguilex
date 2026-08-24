@@ -22,7 +22,7 @@ const CONST_DECL_RE = /^\s*const\s+([a-zA-Z_][a-zA-Z0-9_<>]*)\s+([a-zA-Z_][a-zA-
 
 // Member declaration inside a class/object body:
 // optional modifiers, return type, member name, then '(' (method), ';' (property), or '{' (emitter value)
-const MEMBER_DECL_RE = /^\s*(?:(?:extern|emitter|replace|const|array|readonly|static|explicit|default|superposed|additive)\s+)*\b([a-zA-Z_][a-zA-Z0-9_<>]*)\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*(?:=\s*(?:\{[^}]*\}|[^;{(]*))?(\(|;|\{)/;
+const MEMBER_DECL_RE = /^\s*(?:(?:extern|emitter|replace|const|array|readonly|static|explicit|default|superposed|additive|inline)\s+)*\b([a-zA-Z_][a-zA-Z0-9_<>]*)\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*(?:=\s*(?:\{[^}]*\}|[^;{(]*))?(\(|;|\{)/;
 
 // Body-opener for collectMembers — broader than DECL_RE: also matches
 // 'extend class Foo' so that members added via extension are included.
@@ -57,7 +57,7 @@ const BEGUILE_KEYWORDS = new Set([
     'class', 'object', 'enum', 'bnum', 'verb', 'grammar', 'attribute', 'property',
     'patternElement', 'grammarRule', 'grammarRuleList',
     // declaration modifiers
-    'extern', 'extend', 'emitter', 'replace', 'const', 'alias', 'byVal', 'ref', 'readonly', 'static', 'explicit', 'default', 'superposed', 'additive',
+    'extern', 'extend', 'emitter', 'replace', 'const', 'alias', 'byVal', 'ref', 'readonly', 'static', 'explicit', 'default', 'superposed', 'additive', 'inline',
     // contextual verb-extend member keywords (colored by the TextMate verb-extend-members
     // rule as storage.type); listed here so a same-named real member can't make the
     // semantic-token layer repaint `synonyms`/`priority` as a property in `synonyms = {…}`
