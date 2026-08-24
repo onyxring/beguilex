@@ -2,7 +2,7 @@
   "name": "beguile-language",
   "displayName": "Beguilex",
   "description": "Editor support, debugger, and embedded interpreter for the Beguile Interactive Fiction language",
-  "version": "0.1.0-preview",
+  "version": "0.1.0-preview.3",
   "preview": true,
   "publisher": "OnyxRing",
   "engines": {
