@@ -78,6 +78,10 @@ function newestExisting(candidates: string[]): string | undefined {
     return best;
 }
 
+// Live Beguile debug sessions (populated by onDidStart/Terminate listeners in
+// activate). Used to tear down a running session before a new Run starts.
+const activeBeguileSessions = new Set<vscode.DebugSession>();
+
 export function activate(context: vscode.ExtensionContext) {
     outputChannel.appendLine('[Beguilex] Extension activated');
     setBeguileOutputChannel(outputChannel);
@@ -85,6 +89,17 @@ export function activate(context: vscode.ExtensionContext) {
 
     context.subscriptions.push(
         vscode.debug.registerDebugAdapterDescriptorFactory('beguile', new BeguileDebugAdapterFactory(context))
+    );
+
+    // Track live Beguile debug sessions so a fresh Run can stop the previous one
+    // instead of stacking a second session on top of it.
+    context.subscriptions.push(
+        vscode.debug.onDidStartDebugSession((s) => {
+            if (s.type === 'beguile') { activeBeguileSessions.add(s); }
+        }),
+        vscode.debug.onDidTerminateDebugSession((s) => {
+            activeBeguileSessions.delete(s);
+        })
     );
 
     context.subscriptions.push(
@@ -329,6 +344,19 @@ export function activate(context: vscode.ExtensionContext) {
         if (!fs.existsSync(dbgPath)) {
             vscode.window.showErrorMessage('I6 debug file (.dbg) not found — ensure beguiler compiled with --debug.');
             return;
+        }
+
+        // Tear down any Beguile debug session already running so a fresh Run
+        // replaces it instead of stacking a second interpreter/session on top.
+        if (activeBeguileSessions.size > 0) {
+            const stopping = [...activeBeguileSessions];
+            await Promise.all(stopping.map((s) => vscode.debug.stopDebugging(s)));
+            // Wait (briefly) for termination events to drain the set so the new
+            // session starts from a clean slate.
+            const deadline = Date.now() + 3000;
+            while (activeBeguileSessions.size > 0 && Date.now() < deadline) {
+                await new Promise((r) => setTimeout(r, 50));
+            }
         }
 
         const ext = path.extname(storyPath).toLowerCase();
