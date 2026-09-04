@@ -1,0 +1,11 @@
+# npm dependencies
+node_modules/
+
+# TypeScript build output
+out/
+
+# Packaged extension
+*.vsix
+
+# macOS
+.DS_Store
