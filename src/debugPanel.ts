@@ -396,6 +396,28 @@ ${isZMachine ? `<script src="${zvmJs}"></script><script src="${zvmDbgJs}"></scri
                         if (window._bglDebugOutput) { window._bglDebugOutput(text); }
                     };
                 }
+                /* Also mirror single-char output (glk_put_char / _uni). Quixe routes streamchar
+                   through glk_put_char, so STANDALONE newlines (I6 new_line, paragraph breaks
+                   between the banner / room name / description) arrive as glk_put_char(10). Wrapping
+                   only glk_put_jstring dropped them, mashing those lines together in the console.
+                   (streamchar -> put_char, streamstr/streamnum -> put_jstring: no overlap, no dupes.) */
+                if (window.Glk && window.Glk.glk_put_char) {
+                    var _origPutChar = window.Glk.glk_put_char;
+                    window.Glk.glk_put_char = function(ch) {
+                        _origPutChar.call(this, ch);
+                        if (window._bglDebugOutput) { window._bglDebugOutput(String.fromCharCode(ch & 0xff)); }
+                    };
+                }
+                if (window.Glk && window.Glk.glk_put_char_uni) {
+                    var _origPutCharUni = window.Glk.glk_put_char_uni;
+                    window.Glk.glk_put_char_uni = function(ch) {
+                        _origPutCharUni.call(this, ch);
+                        if (window._bglDebugOutput) {
+                            try { window._bglDebugOutput(String.fromCodePoint(ch >>> 0)); }
+                            catch (_e) { window._bglDebugOutput(String.fromCharCode(ch & 0xffff)); }
+                        }
+                    };
+                }
             }
 
         } else if (msg.type === 'setTheme') {

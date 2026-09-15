@@ -1,0 +1,54 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Beguile I6 Template",
+  "scopeName": "source.i6b",
+  "fileTypes": ["i6b"],
+  "patterns": [
+    { "include": "#comment" },
+    { "include": "#template" }
+  ],
+  "repository": {
+    "comment": {
+      "comment": "Build-time comments (// line and /* block */) — stripped by the loader, valid anywhere.",
+      "patterns": [
+        { "begin": "/\\*", "end": "\\*/", "name": "comment.block.i6b" },
+        { "match": "//.*$", "name": "comment.line.double-slash.i6b" }
+      ]
+    },
+    "template": {
+      "comment": "template <name>($p1, $p2) [triggers a b] {{{ ... }}} — header on one line, body until a lone }}}.",
+      "name": "meta.template.i6b",
+      "begin": "^(template)\\b\\s+([A-Za-z_][A-Za-z0-9_.]*)\\s*(\\()([^)]*)(\\))\\s*(?:(triggers)\\b\\s+([^{]*?)\\s*)?(\\{\\{\\{)\\s*$",
+      "beginCaptures": {
+        "1": { "name": "keyword.control.template.i6b" },
+        "2": { "name": "entity.name.function.template.i6b" },
+        "3": { "name": "punctuation.definition.parameters.begin.i6b" },
+        "4": {
+          "patterns": [
+            { "match": "\\$?[A-Za-z_][A-Za-z0-9_]*", "name": "variable.parameter.i6b" },
+            { "match": ",", "name": "punctuation.separator.parameter.i6b" }
+          ]
+        },
+        "5": { "name": "punctuation.definition.parameters.end.i6b" },
+        "6": { "name": "keyword.control.triggers.i6b" },
+        "7": {
+          "patterns": [
+            { "match": "[A-Za-z_][A-Za-z0-9_]*", "name": "entity.name.tag.trigger.i6b" }
+          ]
+        },
+        "8": { "name": "punctuation.section.template.fence.i6b" }
+      },
+      "end": "^(\\}\\}\\})\\s*$",
+      "endCaptures": {
+        "1": { "name": "punctuation.section.template.fence.i6b" }
+      },
+      "comment2": "Body is raw I6 (embedded source.inform6); build-time comments and $param holes win over the I6 grammar.",
+      "contentName": "meta.embedded.block.inform6.i6b",
+      "patterns": [
+        { "include": "#comment" },
+        { "match": "\\$[A-Za-z_][A-Za-z0-9_]*", "name": "variable.parameter.i6b" },
+        { "include": "source.inform6" }
+      ]
+    }
+  }
+}

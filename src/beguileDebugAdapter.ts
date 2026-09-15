@@ -80,6 +80,8 @@ export class BeguileDebugAdapter implements vscode.DebugAdapter {
      * Cleared on every resume so stale refs don't survive across steps.
      */
     private varRefMap  = new Map<number, { objAddr: number; typeName: string }>();
+    /** Expandable array rows: variablesReference → the array's base pointer, element type, capacity. */
+    private arrayRefMap = new Map<number, { base: number; elemType: string; capacity: number; dataOffset: number }>();
     private nextVarRef = 3000;
 
     /** Fixed variablesReference for the "Self" scope. */
@@ -94,6 +96,15 @@ export class BeguileDebugAdapter implements vscode.DebugAdapter {
     /** Whether the in-flight step was initiated in I6/library mode (governs onVmBreak auto-step). */
     private stepInitiatedI6Mode = false;
     private stepOriginRoutine: any | undefined;  // routine at step-over start (for call-depth check)
+    /**
+     * Breakpoint sites, keyed by the source file VS Code set them in. Each entry maps the VM
+     * addresses that line resolves to → the source line, so a break can be attributed back to the
+     * exact file+line the user set the breakpoint on. `isBgl` records whether the source is a
+     * .bgl (map source) or a pure-I6 file. Rebuilt per source on every setBreakpoints.
+     */
+    private breakpointsBySource = new Map<string, { isBgl: boolean; addrToLine: Map<number, number> }>();
+    /** The breakpoint that produced the current stop (undefined for step stops / no match). */
+    private breakpointHitSource: { file: string; line: number; isBgl: boolean } | undefined;
 
     public setVarFilter(filter: string): void {
         this.varFilter = filter;
@@ -203,18 +214,20 @@ export class BeguileDebugAdapter implements vscode.DebugAdapter {
                 if (this.debugInfo && this.debugInfo.isBglSource(src)) {
                     const verified: Array<{ verified: boolean; line: number; message?: string }> = [];
                     const addrs = new Set<number>();
+                    const addrToLine = new Map<number, number>();
 
                     for (const bp of bps) {
                         const vmAddrs = this.debugInfo.bglToVmAddrs(src, bp.line);
                         dbgLog(`  line ${bp.line} → vmAddrs=[${vmAddrs.map(a=>'0x'+a.toString(16)).join(',')}]`);
                         if (vmAddrs.length > 0) {
                             verified.push({ verified: true, line: bp.line });
-                            for (const a of vmAddrs) { addrs.add(a); }
+                            for (const a of vmAddrs) { addrs.add(a); addrToLine.set(a, bp.line); }
                         } else {
                             verified.push({ verified: false, line: bp.line, message: 'No code at this line' });
                         }
                     }
 
+                    this.recordBreakpointSites(src, true, addrToLine);
                     dbgLog(`  → updateBreakpoints with ${addrs.size} addrs`);
                     this.panel?.updateBreakpoints(src, addrs);
                     this.respond(message, { breakpoints: verified });
@@ -222,17 +235,19 @@ export class BeguileDebugAdapter implements vscode.DebugAdapter {
                     // Pure I6 source breakpoints — map I6 line → VM addresses via addrToInf
                     const verified: Array<{ verified: boolean; line: number; message?: string }> = [];
                     const addrs = new Set<number>();
+                    const addrToLine = new Map<number, number>();
 
                     for (const bp of bps) {
                         const vmAddrs = this.debugInfo.vmAddrsForInfLine(bp.line, src);
                         if (vmAddrs.length > 0) {
                             verified.push({ verified: true, line: bp.line });
-                            for (const a of vmAddrs) { addrs.add(a); }
+                            for (const a of vmAddrs) { addrs.add(a); addrToLine.set(a, bp.line); }
                         } else {
                             verified.push({ verified: false, line: bp.line, message: 'No code at this line' });
                         }
                     }
 
+                    this.recordBreakpointSites(src, false, addrToLine);
                     this.panel?.updateBreakpoints(src, addrs);
                     this.respond(message, { breakpoints: verified });
                 } else {
@@ -275,15 +290,38 @@ export class BeguileDebugAdapter implements vscode.DebugAdapter {
                 // This caused the "focus reverts to .bgl pane" bug during I6 stepping.
                 const mainInfPath = this.config?.infPath;
                 const infSources = this.debugInfo?.allInfSourceFiles() ?? [];
-                const i6Mode = (!!this.currentInfLocation && !this.currentBglFile) ||
-                    vscode.window.visibleTextEditors.some(
-                        e => e.document.uri.fsPath === mainInfPath || infSources.includes(e.document.uri.fsPath)
-                    );
+                // I6 mode for SOURCE NAVIGATION — decides whether a frame navigates to the .inf
+                // instead of the .bgl. Gate it on the ACTIVE editor, not merely a visible one:
+                // opening the transpiled .inf in another pane must NOT hijack a breakpoint that
+                // was set in a .bgl file (Jim: "stop on the file which has the breakpoint; don't
+                // open an .inf unless the active debugging window is also .inf").
+                //   (a) no .bgl mapping (pure library/I6 code) → must show .inf, there's no .bgl.
+                //   (b) the active editor IS an .inf source → the user is looking at I6.
+                //   (c) this stop is a STEP that began in I6 mode → keep .inf focus through I6
+                //       stepping even if the active editor momentarily isn't the .inf pane.
+                const activePath = vscode.window.activeTextEditor?.document.uri.fsPath;
+                const activeIsInf = !!activePath &&
+                    (activePath === mainInfPath || infSources.includes(activePath));
+                const i6Mode = (!!this.currentInfLocation && !this.currentBglFile)
+                    || activeIsInf
+                    || (this.lastStopReason === 'step' && this.stepInitiatedI6Mode);
                 const resolveSource = (
                     bglLoc: BglLocation | undefined,
                     infLoc: { path: string; line: number } | undefined,
                     isTopFrame = false
                 ) => {
+                    // A breakpoint stop lands on the file the breakpoint was set in — even when an
+                    // .inf pane is the active editor. The breakpoint's own source wins over i6Mode.
+                    if (isTopFrame && this.breakpointHitSource) {
+                        const bp = this.breakpointHitSource;
+                        if (bp.isBgl && bglLoc) {
+                            return { source: { path: bglLoc.file, name: nodePath.basename(bglLoc.file) }, line: bglLoc.line };
+                        }
+                        if (!bp.isBgl && infLoc) {
+                            return { source: { path: infLoc.path, name: nodePath.basename(infLoc.path) }, line: infLoc.line };
+                        }
+                        return { source: { path: bp.file, name: nodePath.basename(bp.file) }, line: bp.line };
+                    }
                     if (isTopFrame && i6Mode && infLoc) {
                         return { source: { path: infLoc.path, name: nodePath.basename(infLoc.path) }, line: infLoc.line };
                     }
@@ -482,6 +520,19 @@ export class BeguileDebugAdapter implements vscode.DebugAdapter {
                         }
                     }
 
+                } else if (this.arrayRefMap.has(ref)) {
+                    // ── Array element expansion ───────────────────────────────
+                    const info = this.arrayRefMap.get(ref)!;
+                    if (this.panel) {
+                        const WORDSIZE = this.config?.isZMachine ? 2 : 4;
+                        for (let i = 0; i < info.capacity; i++) {
+                            // dataOffset: 0 for a flat rawArray (data from word 0), 1 for a tracked/
+                            // plain array (word 0 is the header/count).
+                            const raw = (await this.panel.readWord(info.base + (i + info.dataOffset) * WORDSIZE)) ?? 0;
+                            vars.push(await this.makeVarAsync(`[${i}]`, raw, info.elemType));
+                        }
+                    }
+
                 } else if (ref >= 3000) {
                     // ── Object property expansion ─────────────────────────────
                     const entry = this.varRefMap.get(ref);
@@ -529,7 +580,8 @@ export class BeguileDebugAdapter implements vscode.DebugAdapter {
 
                 if (vars.length === 0 && ref === BeguileDebugAdapter.FILTER_SCOPE_REF) {
                     vars.push({ name: 'No matches.', value: '', variablesReference: 0 });
-                } else {
+                } else if (!this.arrayRefMap.has(ref)) {
+                    // Keep array elements in index order ([0],[1],…,[10]); only sort named scopes.
                     vars.sort((a, b) => a.name.localeCompare(b.name));
                 }
                 this.respond(message, { variables: vars });
@@ -539,7 +591,10 @@ export class BeguileDebugAdapter implements vscode.DebugAdapter {
             case 'evaluate': {
                 const expr      = (message.arguments?.expression ?? '').trim();
                 const frameId2  = message.arguments?.frameId ?? 0;
-                let   result    = '';
+                // Resolve the expression to a raw value + its Beguile type, then render it the same
+                // way the Variables pane does (via makeVarAsync) so the Watch pane gets bool/enum/
+                // string formatting AND expandable arrays/objects — not just a bare number/address.
+                let resolved: { raw: number; type: string | undefined } | undefined;
 
                 if (this.debugInfo && this.currentVmState) {
                     // Search current frame locals first
@@ -553,18 +608,29 @@ export class BeguileDebugAdapter implements vscode.DebugAdapter {
                                          : undefined);
                         const local = routine?.locals.find(l => l.name === expr);
                         if (local !== undefined) {
-                            result = String(vmFrame.locals[local.frameOffset] ?? 0);
+                            const type = routine ? this.debugInfo.localVarType(routine.startAddr, expr) : undefined;
+                            resolved = { raw: (vmFrame.locals[local.frameOffset] ?? 0) as number, type };
                         }
                     }
                     // Fall back to globals
-                    if (result === '') {
+                    if (!resolved) {
                         const g = this.debugInfo.globals().find(g => g.name === expr);
-                        if (g) { result = String(this.currentVmState.globals[g.address] ?? 0); }
+                        if (g) {
+                            resolved = {
+                                raw: this.currentVmState.globals[g.address] ?? 0,
+                                type: this.debugInfo.globalVarType(expr),
+                            };
+                        }
                     }
                 }
 
-                if (result !== '') {
-                    this.respond(message, { result, variablesReference: 0 });
+                if (resolved) {
+                    const v = await this.makeVarAsync(expr, resolved.raw, resolved.type);
+                    this.respond(message, {
+                        result: v.value,
+                        type: v.type,
+                        variablesReference: v.variablesReference ?? 0,
+                    });
                 } else {
                     this.respond(message, {}, `Unknown variable: ${expr}`);
                 }
@@ -677,6 +743,7 @@ export class BeguileDebugAdapter implements vscode.DebugAdapter {
                 this.clearInfHighlight();
                 this.hideI6Button();
                 this.varRefMap.clear();
+                this.arrayRefMap.clear();
                 dbgLog(`continue → addr 0x${(this.currentVmAddr ?? 0).toString(16)}`);
                 this.panel?.sendContinue();
                 this.respond(message, { allThreadsContinued: true });
@@ -707,6 +774,7 @@ export class BeguileDebugAdapter implements vscode.DebugAdapter {
                 this.clearInfHighlight();
                 this.hideI6Button();
                 this.varRefMap.clear();
+                this.arrayRefMap.clear();
                 this.lastStepCommand = message.command;
                 // Save the routine we're stepping FROM so step-over can detect calls
                 this.stepOriginRoutine = this.currentVmAddr !== undefined
@@ -761,6 +829,21 @@ export class BeguileDebugAdapter implements vscode.DebugAdapter {
         }
     }
 
+    /** Replace the breakpoint sites for `src` (empty set clears the source). */
+    private recordBreakpointSites(src: string, isBgl: boolean, addrToLine: Map<number, number>): void {
+        if (addrToLine.size === 0) { this.breakpointsBySource.delete(src); return; }
+        this.breakpointsBySource.set(src, { isBgl, addrToLine });
+    }
+
+    /** Find the breakpoint (file+line) whose resolved addresses include `vmAddr`, if any. */
+    private lookupBreakpointSite(vmAddr: number): { file: string; line: number; isBgl: boolean } | undefined {
+        for (const [file, info] of this.breakpointsBySource) {
+            const line = info.addrToLine.get(vmAddr);
+            if (line !== undefined) { return { file, line, isBgl: info.isBgl }; }
+        }
+        return undefined;
+    }
+
     // ── onVmBreak — auto-step cascade ─────────────────────────────
     // Called when the VM stops at a breakpoint or step boundary.
     //
@@ -813,6 +896,9 @@ export class BeguileDebugAdapter implements vscode.DebugAdapter {
         }
         this.updateI6Button();
         this.lastStopReason = isStep ? 'step' : 'breakpoint';
+        // Attribute a breakpoint stop to the file+line the user set it on, so stackTrace can
+        // navigate there regardless of which pane is active. Step stops clear it.
+        this.breakpointHitSource = isStep ? undefined : this.lookupBreakpointSite(vmAddr);
         this.sendEvent('stopped', {
             reason: this.lastStopReason,
             threadId: 1,
@@ -838,10 +924,6 @@ export class BeguileDebugAdapter implements vscode.DebugAdapter {
         if (!this.config?.bgldbgPath) { return; }
         const infFilePath = this.currentInfLocation?.path
             ?? this.config.infPath;
-        const isDocOpen = (p: string) => vscode.window.tabGroups.all.some(
-            g => g.tabs.some(t => t.input instanceof vscode.TabInputText && t.input.uri.fsPath === p)
-        );
-        const infOpen = isDocOpen(infFilePath);
 
         // Track the inf editor column whenever it's visible (for open-beside logic).
         const infEditor = vscode.window.visibleTextEditors.find(
@@ -855,12 +937,14 @@ export class BeguileDebugAdapter implements vscode.DebugAdapter {
             this.hideI6Button();
             return;
         }
-        const bglOpen = !!this.currentBglFile && isDocOpen(this.currentBglFile);
-        // I6 button: show on .bgl editor when I6 file is not open
-        vscode.commands.executeCommand('setContext', 'beguile.showOpenI6Button', !infOpen);
-        // BGL button: show on .inf editor when I6 file is open but bgl file is not
+        // These are view-SWITCH buttons (.bgl title → jump to I6, .inf title → jump to Beguile),
+        // so keep each available while paused whenever we hold a location in that file — do NOT
+        // hide them once the counterpart is open. Previously both were gated on the target being
+        // closed, so with both the .bgl and .inf panes up neither button appeared. The package.json
+        // `when` clauses already scope them to the right editor by extension.
+        vscode.commands.executeCommand('setContext', 'beguile.showOpenI6Button', true);
         vscode.commands.executeCommand('setContext', 'beguile.showOpenBglButton',
-            infOpen && !bglOpen && !!this.currentBglFile);
+            !!this.currentBglFile && this.currentBglLine !== undefined);
     }
 
     private hideI6Button(): void {
@@ -1020,6 +1104,14 @@ export class BeguileDebugAdapter implements vscode.DebugAdapter {
     }
 
     private async makeVarAsync(name: string, raw: number, bglType: string | undefined): Promise<any> {
+        // Tracked word arrays (array<var>, array<int>, array<object>, …) render as an expandable row.
+        // Also accept bare "array" (older/sized locals whose element type didn't reach the .bgldbg —
+        // element type then defaults to var). array<char> is a byte buffer with a different layout;
+        // skip it (the $9084 magic check in makeArrayVar also guards against non-word-array pointers).
+        if (bglType && (bglType === 'array' || bglType.startsWith('array<') || bglType.startsWith('rawarray'))
+            && !bglType.startsWith('array<char>')) {
+            return this.makeArrayVar(name, raw, bglType);
+        }
         let decoded: string | undefined;
         if (bglType === 'string' && this.panel && raw) {
             decoded = (await this.panel.decodeString(raw)) ?? undefined;
@@ -1044,6 +1136,72 @@ export class BeguileDebugAdapter implements vscode.DebugAdapter {
             }
         }
         return this.makeVar(name, raw, bglType, decoded);
+    }
+
+    /** Element type of an `array<T>` (or `array<T>[N]`) string; T may itself be `array<...>`. */
+    private arrayElementType(bglType: string): string {
+        const lt = bglType.indexOf('<');
+        const gt = bglType.lastIndexOf('>');
+        return (lt >= 0 && gt > lt) ? bglType.slice(lt + 1, gt).trim() : 'var';
+    }
+
+    /** Declared element count from an `array<T>[N]` type string, or undefined if unsized. */
+    private arrayDeclaredSize(bglType: string): number | undefined {
+        const m = /\]\s*$/.test(bglType) ? /\[(\d+)\]\s*$/.exec(bglType) : null;
+        return m ? parseInt(m[1], 10) : undefined;
+    }
+
+    /**
+     * Build an expandable Variables/Watch row for a tracked word array. Children are read lazily
+     * (see the arrayRefMap branch in 'variables'). The $9084 magic is validated up front so a
+     * non-array pointer — or an array<char> byte buffer, which uses a different layout — degrades
+     * to a plain address instead of rendering garbage.
+     *
+     * Runtime layout (from `_bglArrayLocalAlloc` in __builtins.i6b and the global-array init in
+     * i6Emitter.cpp): word[0] = capacity+2 · word[1..capacity] = elements · word[capacity+1] =
+     * tracked length · word[capacity+2] = $9084. So `arr[i]` == readWord(base + (i+1)*WORDSIZE).
+     */
+    private async makeArrayVar(name: string, base: number, bglType: string): Promise<any> {
+        const elemType = this.arrayElementType(bglType);
+        const isRaw = bglType.startsWith('rawarray');
+        const diag = (v: string) => ({ name, value: v, type: bglType, variablesReference: 0 });
+        if (!base) { return diag('null'); }
+        if (!this.panel) { return diag(`0x${(base >>> 0).toString(16)}`); }
+        const WORDSIZE = this.config?.isZMachine ? 2 : 4;
+        const declared = this.arrayDeclaredSize(bglType);
+
+        if (isRaw) {
+            // rawArray: a bare flat block — data from word 0, NO header/length/magic. Capacity is
+            // only knowable from the declared [N] (a raw pointer has no recoverable extent).
+            if (declared === undefined) { return diag(`rawarray<${elemType}> 0x${(base >>> 0).toString(16)}`); }
+            const varRef = this.nextVarRef++;
+            this.arrayRefMap.set(varRef, { base, elemType, capacity: declared, dataOffset: 0 });
+            return { name, value: `rawarray<${elemType}> (size ${declared})`, type: bglType, variablesReference: varRef };
+        }
+
+        // Tracked/plain array<T>: element 0 lives at word 1 (word 0 is the header/count).
+        // Capacity: prefer the compile-time declared size (array<T>[N]) — it survives even when the
+        // in-memory tracked header word is overwritten (e.g. a buffer passed to glk_select). Fall
+        // back to the runtime header (word[0] − 2) for unsized/dynamic arrays.
+        let capacity = declared;
+        if (capacity === undefined) {
+            const header = await this.panel.readWord(base);
+            if (header == null) { return diag(`array<${elemType}> ⟨readWord→null @0x${(base >>> 0).toString(16)}⟩`); }
+            capacity = header - 2;
+            if (capacity < 0 || capacity > 4096) {
+                return diag(`array<${elemType}> ⟨hdr=${header} ws=${WORDSIZE} @0x${(base >>> 0).toString(16)}⟩`);
+            }
+        }
+
+        // Tracked length lives at word[capacity+1] and is only trustworthy when the $9084 magic at
+        // word[capacity+2] is intact; show it only then (a clobbered buffer leaves both garbage).
+        const magic  = await this.panel.readWord(base + (capacity + 2) * WORDSIZE);
+        const length = await this.panel.readWord(base + (capacity + 1) * WORDSIZE);
+        const lenNote = (magic === 0x9084 && length != null) ? `; len ${length}` : '';
+
+        const varRef = this.nextVarRef++;
+        this.arrayRefMap.set(varRef, { base, elemType, capacity, dataOffset: 1 });
+        return { name, value: `array<${elemType}> (size ${capacity}${lenNote})`, type: bglType, variablesReference: varRef };
     }
 
     private makeVar(name: string, raw: number, bglType: string | undefined, decoded?: string): any {

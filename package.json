@@ -29,7 +29,11 @@
         "extensions": [
           ".bgl"
         ],
-        "configuration": "./language-configuration.json"
+        "configuration": "./language-configuration.json",
+        "icon": {
+          "light": "./icons/beguile-file.svg",
+          "dark": "./icons/beguile-file.svg"
+        }
       },
       {
         "id": "inform6",
@@ -39,6 +43,21 @@
         "extensions": [
           ".inf"
         ]
+      },
+      {
+        "id": "i6b",
+        "aliases": [
+          "Beguile I6 Template",
+          "i6b"
+        ],
+        "extensions": [
+          ".i6b"
+        ],
+        "configuration": "./i6b-language-configuration.json",
+        "icon": {
+          "light": "./icons/i6b-file.svg",
+          "dark": "./icons/i6b-file.svg"
+        }
       }
     ],
     "grammars": [
@@ -60,6 +79,14 @@
         "embeddedLanguages": {
           "meta.embedded.block.bgl.inform6": "beguile",
           "meta.embedded.line.bgl.inform6": "beguile"
+        }
+      },
+      {
+        "language": "i6b",
+        "scopeName": "source.i6b",
+        "path": "./syntaxes/i6b.tmLanguage.json",
+        "embeddedLanguages": {
+          "meta.embedded.block.inform6.i6b": "inform6"
         }
       }
     ],
@@ -99,6 +126,12 @@
             "type": "string",
             "default": "",
             "markdownDescription": "Path to the beguiler compiler binary. *(Should be an absolute path.)*"
+          },
+          "beguiler.syntaxHints": {
+            "order": 20,
+            "type": "boolean",
+            "default": true,
+            "markdownDescription": "Show syntax-hint completions as you type a declaration keyword (currently the `enum` popup + snippet). Turn off if you find them distracting."
           },
           "beguiler.libraryPath": {
             "order": 2,
@@ -253,6 +286,23 @@
           "light": "./media/bgl-light.svg",
           "dark": "./media/bgl-dark.svg"
         }
+      },
+      {
+        "command": "beguile.setEntryPoint",
+        "title": "Beguile: Set Entry Point"
+      },
+      {
+        "command": "beguile.clearEntryPoint",
+        "title": "Beguile: Clear Entry Point"
+      },
+      {
+        "command": "beguile.revealEntryPoint",
+        "title": "Beguile: Reveal Entry Point"
+      },
+      {
+        "command": "beguile.entryPointIndicator",
+        "title": "Beguile: Entry Point",
+        "icon": "$(rocket)"
       }
     ],
     "menus": {
@@ -266,6 +316,41 @@
           "command": "beguile.openBglSource",
           "when": "beguile.showOpenBglButton && resourceExtname == .inf",
           "group": "navigation"
+        },
+        {
+          "command": "beguile.entryPointIndicator",
+          "when": "resourceExtname == .bgl && resourcePath in beguile.entryPointPaths",
+          "group": "navigation@9"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "beguile.entryPointIndicator",
+          "when": "false"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "beguile.setEntryPoint",
+          "when": "resourceExtname == .bgl && !(resourcePath in beguile.entryPointPaths)",
+          "group": "beguile@1"
+        },
+        {
+          "command": "beguile.clearEntryPoint",
+          "when": "resourceExtname == .bgl && resourcePath in beguile.entryPointPaths",
+          "group": "beguile@1"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "beguile.setEntryPoint",
+          "when": "resourceExtname == .bgl && !(resourcePath in beguile.entryPointPaths)",
+          "group": "beguile@1"
+        },
+        {
+          "command": "beguile.clearEntryPoint",
+          "when": "resourceExtname == .bgl && resourcePath in beguile.entryPointPaths",
+          "group": "beguile@1"
         }
       ]
     },
@@ -278,6 +363,22 @@
           "“": true,
           "”": true
         }
+      },
+      "[i6b]": {
+        "editor.language.colorizedBracketPairs": [
+          ["(", ")"],
+          ["[", "]"]
+        ]
+      },
+      "editor.tokenColorCustomizations": {
+        "textMateRules": [
+          {
+            "scope": "punctuation.section.template.fence.i6b",
+            "settings": {
+              "foreground": "#E2C08D"
+            }
+          }
+        ]
       }
     },
     "semanticTokenScopes": [

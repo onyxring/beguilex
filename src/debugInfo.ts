@@ -218,8 +218,11 @@ export class DebugInfo {
                             currentEnum   = null;
                             currentLocals = new Map();
                             currentLocalMeta = new Map();
-                            this.routineTyped.set(parts[1], currentLocals);
-                            this.routineLocalMeta.set(parts[1], currentLocalMeta);
+                            // Key by lower-case: I6 identifiers are case-insensitive, and the .dbg
+                            // routine name (e.g. "globalWaitForKey") can differ in case from the
+                            // .bgldbg [types] name ("globalwaitforkey"). Lookups lower-case to match.
+                            this.routineTyped.set(parts[1].toLowerCase(), currentLocals);
+                            this.routineLocalMeta.set(parts[1].toLowerCase(), currentLocalMeta);
                             break;
                         case 'local':
                             if (currentLocals && parts.length >= 3) {
@@ -489,7 +492,7 @@ export class DebugInfo {
     localVarType(routineAddr: number, varName: string): BglType | undefined {
         const routine = this.routineContaining(routineAddr) ?? this.routineByAddr(routineAddr);
         if (!routine) { return undefined; }
-        return this.routineTyped.get(routine.name)?.get(varName);
+        return this.routineTyped.get(routine.name.toLowerCase())?.get(varName);
     }
 
     /** Beguile type for a global variable, or undefined if not in .types. */
@@ -500,7 +503,7 @@ export class DebugInfo {
     /** Storage location of a local (from .types): `slot` (frame-resident) or `_bglFrm-->N` (spilled). */
     localStorage(routineAddr: number, varName: string): string | undefined {
         const routine = this.routineContaining(routineAddr) ?? this.routineByAddr(routineAddr);
-        return routine ? this.routineLocalMeta.get(routine.name)?.get(varName)?.storage : undefined;
+        return routine ? this.routineLocalMeta.get(routine.name.toLowerCase())?.get(varName)?.storage : undefined;
     }
 
     /**
@@ -523,7 +526,7 @@ export class DebugInfo {
      */
     localSynthetic(routineAddr: number, varName: string): boolean {
         const routine = this.routineContaining(routineAddr) ?? this.routineByAddr(routineAddr);
-        return !!(routine && this.routineLocalMeta.get(routine.name)?.get(varName)?.synthetic);
+        return !!(routine && this.routineLocalMeta.get(routine.name.toLowerCase())?.get(varName)?.synthetic);
     }
 
     /**
@@ -535,8 +538,8 @@ export class DebugInfo {
     spilledLocals(routineAddr: number): { name: string; type: BglType | undefined; index: number }[] {
         const routine = this.routineContaining(routineAddr) ?? this.routineByAddr(routineAddr);
         if (!routine) { return []; }
-        const meta  = this.routineLocalMeta.get(routine.name);
-        const types = this.routineTyped.get(routine.name);
+        const meta  = this.routineLocalMeta.get(routine.name.toLowerCase());
+        const types = this.routineTyped.get(routine.name.toLowerCase());
         if (!meta) { return []; }
         const out: { name: string; type: BglType | undefined; index: number }[] = [];
         for (const [name, m] of meta) {

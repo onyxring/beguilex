@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as cp from 'child_process';
 import * as fs from 'fs';
-import { LanguageClient, LanguageClientOptions, ServerOptions } from 'vscode-languageclient/node';
+import { LanguageClient, LanguageClientOptions, ServerOptions, State } from 'vscode-languageclient/node';
 import { BeguileDebugAdapterFactory, openI6SourceCommand, openBglSourceCommand, setBeguileOutputChannel, setActiveVarFilter } from './beguileDebugAdapter';
 import { VariableFilterViewProvider } from './variableFilterView';
 import { setDebugPanelOutputChannel } from './debugPanel';
@@ -10,6 +10,33 @@ import { BeguileSemanticTokensProvider, tokenLegend } from './semanticTokens';
 
 const outputChannel = vscode.window.createOutputChannel('Beguile');
 let lspClient: LanguageClient | undefined;
+
+// fsPath of the designated entry-point .bgl (the file F5/Debug/Play compiles, and the root the
+// LSP parses included files against so their #if gating/symbols resolve). undefined = none set;
+// callers then fall back to the active editor. Persisted in workspaceState under this key.
+let beguileEntryPoint: string | undefined;
+const ENTRY_POINT_STATE_KEY = 'beguile.entryPoint';
+
+/** Push the current entry point to the language server (empty path clears it). No-op if the client isn't running. */
+function sendEntryPointToLsp(): void {
+    if (!lspClient || lspClient.state !== State.Running) { return; }
+    lspClient.sendNotification('beguile/setEntryPoint', {
+        uri: beguileEntryPoint ? vscode.Uri.file(beguileEntryPoint).toString() : '',
+    });
+}
+
+/** Push editor settings the server honors (currently `syntaxHints`) to the language server. */
+function sendConfigToLsp(): void {
+    if (!lspClient || lspClient.state !== State.Running) { return; }
+    const syntaxHints = vscode.workspace.getConfiguration('beguiler').get<boolean>('syntaxHints', true);
+    lspClient.sendNotification('beguile/setConfig', { syntaxHints });
+}
+
+/** The file to compile/run: the entry point when set (and still present), else the active editor's file. */
+function resolveRunTarget(editor: vscode.TextEditor | undefined): string | undefined {
+    if (beguileEntryPoint && fs.existsSync(beguileEntryPoint)) { return beguileEntryPoint; }
+    return editor?.document.uri.fsPath;
+}
 
 /** Build the beguiler binary path and CLI args string from extension settings. */
 function beguilerCommand(isDebug: boolean = false): { bin: string; args: string } {
@@ -198,12 +225,16 @@ export function activate(context: vscode.ExtensionContext) {
     // ── Beguile: Play ─────────────────────────────────────────────────────────
     const playCommand = vscode.commands.registerCommand('beguile.play', async () => {
         const editor = vscode.window.activeTextEditor;
-        const langId = editor?.document.languageId;
-        if (!editor || (langId !== 'beguile' && langId !== 'inform6')) {
-            vscode.window.showErrorMessage('Open a .bgl or .inf file to play.');
-            return;
+        // Prefer the designated entry point; fall back to the active .bgl/.inf when none is set.
+        let bglPath = (beguileEntryPoint && fs.existsSync(beguileEntryPoint)) ? beguileEntryPoint : undefined;
+        if (!bglPath) {
+            const langId = editor?.document.languageId;
+            if (!editor || (langId !== 'beguile' && langId !== 'inform6')) {
+                vscode.window.showErrorMessage('Set a Beguile entry point, or open a .bgl/.inf file to play.');
+                return;
+            }
+            bglPath = editor.document.uri.fsPath;
         }
-        const bglPath = editor.document.uri.fsPath;
         const { bin, args } = beguilerCommand();
 
         // Compile the file with beguiler (no --debug for plain play).
@@ -264,12 +295,16 @@ export function activate(context: vscode.ExtensionContext) {
     // ── Beguile: Debug ────────────────────────────────────────────────────────
     const debugCommand = vscode.commands.registerCommand('beguile.debug', async () => {
         const editor = vscode.window.activeTextEditor;
-        const langId = editor?.document.languageId;
-        if (!editor || (langId !== 'beguile' && langId !== 'inform6')) {
-            vscode.window.showErrorMessage('Open a .bgl or .inf file to debug.');
-            return;
+        // Prefer the designated entry point; fall back to the active .bgl/.inf when none is set.
+        let bglPath = (beguileEntryPoint && fs.existsSync(beguileEntryPoint)) ? beguileEntryPoint : undefined;
+        if (!bglPath) {
+            const langId = editor?.document.languageId;
+            if (!editor || (langId !== 'beguile' && langId !== 'inform6')) {
+                vscode.window.showErrorMessage('Set a Beguile entry point, or open a .bgl/.inf file to debug.');
+                return;
+            }
+            bglPath = editor.document.uri.fsPath;
         }
-        const bglPath = editor.document.uri.fsPath;
         const { bin, args } = beguilerCommand(true);
 
         // Compile with --debug. Same spawn-based streaming as the play path so output
@@ -415,8 +450,19 @@ export function activate(context: vscode.ExtensionContext) {
         })
     );
 
+    // Push `beguiler.syntaxHints` to the server whenever it changes, so toggling the setting
+    // takes effect without a reload (completion is pulled per keystroke).
+    context.subscriptions.push(
+        vscode.workspace.onDidChangeConfiguration(e => {
+            if (e.affectsConfiguration('beguiler.syntaxHints')) { sendConfigToLsp(); }
+        })
+    );
+
     lspClient.start().then(() => {
         outputChannel.appendLine('[Beguilex] LSP client connected');
+        // Re-assert the entry point + pushed settings on every (re)connect so they survive restarts.
+        sendEntryPointToLsp();
+        sendConfigToLsp();
         lspClient!.onNotification('beguile/inactiveRegions', (params: { uri: string; ranges: { start: { line: number; character: number }; end: { line: number; character: number } }[] }) => {
             // LSP ranges are end-exclusive. For whole-line decorations, an end
             // at {line:N, char:0} represents "up to but not including line N"
@@ -453,6 +499,180 @@ export function activate(context: vscode.ExtensionContext) {
         })
     );
     context.subscriptions.push(lspClient);
+
+    // --- Asset watcher: refresh the virtual `_blorbAssets.bgl` enum without a keystroke ---
+    // The language server live-scans the asset directory on every reparse to resolve the
+    // image/sound `eAssets` enum (see beguiler lspServer.cpp). That only fires when the DOCUMENT
+    // changes, so dropping a new image into assets/ wouldn't surface until the user typed. This
+    // watcher nudges the server on asset-file changes by re-sending the open .bgl buffer as a
+    // full-document didChange — the server reparses the LIVE buffer (preserving unsaved edits)
+    // and re-runs the scan. A broad glob covers any asset dir name (default assets/, or a custom
+    // blorbAssetPath like media/); reparse is cheap and gated to open .bgl docs.
+    const assetWatcher = vscode.workspace.createFileSystemWatcher('**/*.{png,jpg,jpeg,aiff,aif}');
+    const syntheticVersions = new Map<string, number>();
+    const nudgeOpenBglDocs = () => {
+        if (!lspClient || lspClient.state !== State.Running) { return; }
+        for (const doc of vscode.workspace.textDocuments) {
+            if (doc.languageId !== 'beguile' || doc.uri.scheme !== 'file') { continue; }
+            const key = doc.uri.toString();
+            // Advance a synthetic version above whatever the server last saw (open/change/save
+            // all use doc.version; start above it, then keep incrementing so it never regresses).
+            const next = (syntheticVersions.get(key) ?? doc.version) + 1;
+            syntheticVersions.set(key, next);
+            lspClient.sendNotification('textDocument/didChange', {
+                textDocument: { uri: key, version: next },
+                contentChanges: [{ text: doc.getText() }],   // whole-document replace (no range)
+            }).catch(() => { /* server not ready; next change will catch up */ });
+        }
+    };
+    assetWatcher.onDidCreate(nudgeOpenBglDocs);
+    assetWatcher.onDidDelete(nudgeOpenBglDocs);
+    assetWatcher.onDidChange(nudgeOpenBglDocs);
+    context.subscriptions.push(assetWatcher);
+
+    // ── Entry point: status bar + command + F5 wiring ────────────────────────
+    // The entry point is the .bgl that F5/Debug/Play compiles, and the root the LSP parses
+    // included files against (so their #if gating & cross-file symbols resolve). Persisted
+    // per-workspace. A status-bar item shows the current entry point and opens the picker.
+    beguileEntryPoint = context.workspaceState.get<string>(ENTRY_POINT_STATE_KEY) || undefined;
+    if (beguileEntryPoint && !fs.existsSync(beguileEntryPoint)) { beguileEntryPoint = undefined; }
+
+    const entryStatusItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
+    // Case-insensitive path equality — used to decide whether the ACTIVE editor is the entry point
+    // (drives the status-bar text/highlight). The menu Set↔Clear toggle instead keys off the
+    // `beguile.entryPointPaths` context key (see refreshEntryUi).
+    const sameFile = (a: string | undefined, b: string | undefined) =>
+        !!a && !!b && path.normalize(a).toLowerCase() === path.normalize(b).toLowerCase();
+
+    // Refresh the status bar + the `beguile.entryPointPaths` context key from the current state and
+    // the active editor. Called on activation, entry-point changes, and active-editor switches.
+    // The context key is an array (0 or 1 path) so menus can toggle Set↔Clear via `resourcePath in
+    // beguile.entryPointPaths` — which works in the explorer too (no active-editor dependency).
+    const refreshEntryUi = () => {
+        const activeEditor = vscode.window.activeTextEditor;
+        const activePath = activeEditor?.document.uri.fsPath;
+        const activeIsBgl = !!activePath &&
+            (activeEditor?.document.languageId === 'beguile' || activePath.toLowerCase().endsWith('.bgl'));
+        const activeIsEntry = sameFile(activePath, beguileEntryPoint);
+        vscode.commands.executeCommand('setContext', 'beguile.entryPointPaths', beguileEntryPoint ? [beguileEntryPoint] : []);
+
+        if (activeIsEntry) {
+            // On the entry-point file → highlighted, one-click clear.
+            entryStatusItem.text = '$(rocket) Clear entry point';
+            entryStatusItem.tooltip = `This file is the Beguile entry point.\nF5 / Debug / Play compile it; included files resolve #if highlighting against it.\nClick to clear (return to “run whichever file is open”).`;
+            entryStatusItem.command = 'beguile.clearEntryPoint';
+            entryStatusItem.backgroundColor = new vscode.ThemeColor('statusBarItem.prominentBackground');
+            entryStatusItem.show();
+        } else if (activeIsBgl) {
+            // On a .bgl that is NOT the entry point → set THIS file directly (no picker/dropdown).
+            entryStatusItem.text = '$(rocket) Set entry point';
+            entryStatusItem.tooltip = `Set ${path.basename(activePath!)} as the Beguile entry point.\nF5 / Debug / Play will compile it, and included files resolve #if highlighting against it.`;
+            entryStatusItem.command = { title: 'Set Entry Point', command: 'beguile.setEntryPoint', arguments: [vscode.Uri.file(activePath!)] };
+            entryStatusItem.backgroundColor = undefined;
+            entryStatusItem.show();
+        } else if (beguileEntryPoint) {
+            // Not on a .bgl, but an entry point is set → show it; clicking reveals/opens it.
+            entryStatusItem.text = `$(rocket) Beguile: ${path.basename(beguileEntryPoint)}`;
+            entryStatusItem.tooltip = `Beguile entry point: ${beguileEntryPoint}\nClick to reveal it.`;
+            entryStatusItem.command = 'beguile.revealEntryPoint';
+            entryStatusItem.backgroundColor = undefined;
+            entryStatusItem.show();
+        } else {
+            // Not on a .bgl and nothing set → nothing relevant to show.
+            entryStatusItem.hide();
+        }
+    };
+    context.subscriptions.push(entryStatusItem);
+    context.subscriptions.push(
+        vscode.window.onDidChangeActiveTextEditor(() => refreshEntryUi())
+    );
+    refreshEntryUi();
+    // Push the persisted entry point to the server now in case the client connected first.
+    sendEntryPointToLsp();
+
+    const applyEntryPoint = async (fsPath: string | undefined) => {
+        beguileEntryPoint = fsPath;
+        await context.workspaceState.update(ENTRY_POINT_STATE_KEY, beguileEntryPoint ?? undefined);
+        refreshEntryUi();
+        sendEntryPointToLsp();
+        // Reparse open .bgl buffers so #if graying in included files updates immediately.
+        nudgeOpenBglDocs();
+        vscode.window.setStatusBarMessage(
+            beguileEntryPoint ? `Beguile entry point → ${path.basename(beguileEntryPoint)}` : 'Beguile entry point cleared', 3000);
+    };
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand('beguile.setEntryPoint', async (resource?: vscode.Uri) => {
+            // Invoked from the editor/explorer context menu with a .bgl resource → set it directly.
+            if (resource && resource.fsPath && resource.fsPath.toLowerCase().endsWith('.bgl')) {
+                await applyEntryPoint(resource.fsPath);
+                return;
+            }
+            // Otherwise present a picker: current file, every workspace .bgl, and a clear option.
+            const items: (vscode.QuickPickItem & { fsPath?: string; action?: 'clear' })[] = [];
+            const active = vscode.window.activeTextEditor;
+            if (active && active.document.languageId === 'beguile') {
+                items.push({ label: '$(file) Use current file', description: path.basename(active.document.uri.fsPath), fsPath: active.document.uri.fsPath });
+            }
+            const files = await vscode.workspace.findFiles('**/*.bgl', '**/node_modules/**', 500);
+            for (const f of files.sort((a, b) => a.fsPath.localeCompare(b.fsPath))) {
+                items.push({ label: '$(target) ' + vscode.workspace.asRelativePath(f), description: f.fsPath, fsPath: f.fsPath });
+            }
+            if (beguileEntryPoint) { items.push({ label: '$(x) Clear entry point', action: 'clear' }); }
+            const pick = await vscode.window.showQuickPick(items, { placeHolder: 'Select the Beguile entry-point file (F5 / Debug / Play compile this)', matchOnDescription: true });
+            if (!pick) { return; }
+            await applyEntryPoint(pick.action === 'clear' ? undefined : pick.fsPath);
+        })
+    );
+
+    // Clear the entry point → return to “run/highlight whichever file is open”. Ignores its resource
+    // arg (menu only surfaces it on the entry-point file), so the status-bar click can call it too.
+    context.subscriptions.push(
+        vscode.commands.registerCommand('beguile.clearEntryPoint', async () => {
+            await applyEntryPoint(undefined);
+        })
+    );
+
+    // Pure visual indicator for the editor title bar — the rocket shown on the entry-point file.
+    // Intentionally does nothing when clicked (the title-bar rocket is an indicator, not a button).
+    context.subscriptions.push(
+        vscode.commands.registerCommand('beguile.entryPointIndicator', () => { /* no-op: indicator only */ })
+    );
+
+    // Reveal the entry-point file: open it in an editor and highlight it in the Explorer. Bound to
+    // the status-bar click when a different file is active (replaces the old picker dropdown).
+    context.subscriptions.push(
+        vscode.commands.registerCommand('beguile.revealEntryPoint', async () => {
+            if (!beguileEntryPoint || !fs.existsSync(beguileEntryPoint)) {
+                // Nothing to reveal — fall back to the picker so the click still does something useful.
+                await vscode.commands.executeCommand('beguile.setEntryPoint');
+                return;
+            }
+            const uri = vscode.Uri.file(beguileEntryPoint);
+            await vscode.window.showTextDocument(uri, { preview: false });
+            await vscode.commands.executeCommand('revealInExplorer', uri);
+        })
+    );
+
+    // F5 with no launch.json: resolve an empty/bare `beguile` config by running the Debug command
+    // (which compiles the entry point and launches). Returning undefined aborts the default launch
+    // so we don't double-start. A fully-specified config (user launch.json) passes through.
+    context.subscriptions.push(
+        vscode.debug.registerDebugConfigurationProvider('beguile', {
+            resolveDebugConfiguration: (_folder, config) => {
+                // beguile.debug builds a rich config (storyPath/bgldbgPath/…) and launches it — that
+                // passes through. A bare F5 config (no storyPath) means the user pressed F5 without a
+                // launch.json: run beguile.debug (compiles the entry point + launches) and abort the
+                // default launch by returning undefined, so we don't start an empty session.
+                if (!config.storyPath) {
+                    vscode.commands.executeCommand('beguile.debug');
+                    return undefined;
+                }
+                return config;
+            },
+        })
+    );
+
     outputChannel.appendLine('[Beguilex] LSP client starting: ' + lspBin + ' --lsp ' + lspArgs);
 }
 
