@@ -252,9 +252,9 @@
           }
         },
         {
-          "comment": "I6-level compile-time conditionals: ##ifdef / ##ifndef / ##else / ##endif (and ##if inside emitter bodies). The `##` prefix marks a Beguile transpiler-evaluated conditional (bglParserDirectives.cpp). MUST precede the single-# conditional rule below: without it, `##endif`'s leading # is left unscoped and its inner `#endif` matches the single-# rule (leading # white, rest purple). Longer alternatives (ifdef/ifndef) listed before `if` so `if` can't shadow them. Case-insensitive.",
+          "comment": "Emitter-body compile-time conditionals: ##if / ##else / ##endif. The `##` prefix marks a Beguile transpiler-evaluated conditional inside text that is otherwise raw I6 (bglParserDirectives.cpp). There is no ##ifdef / ##ifndef — `##if SYMBOL` tests definedness (spec 7.4, 14.2.5) — so they are not coloured as directives. MUST precede the single-# conditional rule below: without it, `##endif`'s leading # is left unscoped and its inner `#endif` matches the single-# rule (leading # white, rest purple). Case-insensitive.",
           "name": "meta.preprocessor.conditional.beguile",
-          "match": "(?i)(##(?:ifdef|ifndef|else|endif|if))\\b",
+          "match": "(?i)(##(?:else|endif|if))\\b",
           "captures": {
             "1": { "name": "keyword.control.directive.conditional.beguile" }
           }
@@ -358,7 +358,7 @@
     "keywords-declaration": {
       "comment": "Case-insensitive.",
       "name": "storage.modifier.beguile",
-      "match": "(?i)\\b(asI6|asBgl|byVal|extern|extend|emitter|replace|const|alias|ref|readonly|static|explicit|default|superposed|additive|inline|hide|synonyms|typeSealed)\\b"
+      "match": "(?i)\\b(asI6|asBgl|byVal|extern|extend|emitter|replace|const|alias|ref|static|explicit|default|superposed|additive|inline|hide|synonyms|typeSealed)\\b"
     },
 
     "keywords-type-declaration": {
