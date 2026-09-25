@@ -9,3 +9,6 @@ out/
 
 # macOS
 .DS_Store
+
+# scratch dir for tools/gen-debug-fixtures.sh (path is embedded in the fixtures)
+.fixture-build/

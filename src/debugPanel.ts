@@ -43,6 +43,11 @@ export class DebugPanel {
     private pendingAddrsByFile = new Map<string, Set<number>>();
     private storyPath:    string;
     private isZMachine:   boolean;
+    private context:         vscode.ExtensionContext;
+    /** Set once the webview document has loaded and installed its message listener. A reused
+     *  panel reloads asynchronously, so anything sent before this is dropped on the floor. */
+    private webviewReady = false;
+    private pendingStart: (() => void) | undefined;
     private lastColumn:      vscode.ViewColumn | undefined;
     private onBreak:         (addr: number, vmState: any) => void;
     private onStep:          (addr: number, vmState: any) => void;
@@ -65,14 +70,19 @@ export class DebugPanel {
         viewColumn: vscode.ViewColumn,
         onBreak:    (addr: number, vmState: any) => void,
         onStep:     (addr: number, vmState: any) => void,
-        onClose:    (column: vscode.ViewColumn | undefined) => void
+        onClose:    (column: vscode.ViewColumn | undefined) => void,
+        reuse?:     vscode.WebviewPanel
     ): DebugPanel {
         const nmRoot    = path.join(context.extensionPath, 'node_modules');
         const mediaRoot = path.join(context.extensionPath, 'media');
+        const title     = `Debug: ${path.basename(storyPath)}`;
 
-        const panel = vscode.window.createWebviewPanel(
+        // Reusing the previous run's panel is the only way to keep a placement the user
+        // chose by dragging: createWebviewPanel can name a ViewColumn, but nothing in the
+        // API can target an editor group in a separate (detached) window.
+        const panel = reuse ?? vscode.window.createWebviewPanel(
             DebugPanel.viewType,
-            `Debug: ${path.basename(storyPath)}`,
+            title,
             viewColumn,
             {
                 enableScripts: true,
@@ -84,6 +94,10 @@ export class DebugPanel {
                 ]
             }
         );
+        if (reuse) {
+            reuse.title = title;
+            reuse.reveal(undefined, false); // undefined column = stay put; take focus
+        }
 
         return new DebugPanel(panel, context, storyPath, isZMachine, onBreak, onStep, onClose);
     }
@@ -100,6 +114,7 @@ export class DebugPanel {
         this.panel      = panel;
         this.storyPath  = storyPath;
         this.isZMachine = isZMachine;
+        this.context    = context;
         this.lastColumn = panel.viewColumn;
         this.onBreak    = onBreak;
         this.onStep     = onStep;
@@ -107,9 +122,12 @@ export class DebugPanel {
 
         this.panel.webview.html = this.buildHtml(context, isZMachine);
 
+        // Record the column as it moves, not only on close, so the next run lands where
+        // the panel was last seen even if this session ends without a close event.
         this.panel.onDidChangeViewState(e => {
             if (e.webviewPanel.viewColumn !== undefined) {
                 this.lastColumn = e.webviewPanel.viewColumn;
+                this.context.globalState.update('debugPanelColumn', this.lastColumn);
             }
         }, null, this.disposables);
 
@@ -129,7 +147,12 @@ export class DebugPanel {
         // Messages from WebView
         this.panel.webview.onDidReceiveMessage(
             (msg: { type: string; addr?: number; vmState?: any; reqId?: number; value?: any; ok?: boolean; decoded?: string | null; msg?: string }) => {
-                if (msg.type === 'debugLog') {
+                if (msg.type === 'ready') {
+                    this.webviewReady = true;
+                    const start = this.pendingStart;
+                    this.pendingStart = undefined;
+                    if (start) { start(); }
+                } else if (msg.type === 'debugLog') {
                     panelLog(msg.msg ?? '');
                 } else if (msg.type === 'debugOutput') {
                     if (this.onDebugOutput) { this.onDebugOutput(msg.msg ?? (msg as any).text ?? ''); }
@@ -186,6 +209,10 @@ export class DebugPanel {
 
     /** Called by the adapter after configurationDone — reads the story and starts the game. */
     startGame(globalAddresses: number[] = []): void {
+        if (!this.webviewReady) {
+            this.pendingStart = () => this.startGame(globalAddresses);
+            return;
+        }
         try {
             const buffer = fs.readFileSync(this.storyPath);
             // Include the initial breakpoint set IN the startGame message so the
@@ -262,6 +289,9 @@ export class DebugPanel {
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<!-- Unique per load. Setting webview.html to an IDENTICAL string is a no-op in VS Code, so a
+     reused panel would keep its old document — and Quixe refuses to initialise twice in one page. -->
+<meta name="bgl-run" content="${Date.now()}-${Math.random().toString(36).slice(2)}">
 <meta name="viewport" content="width=device-width, user-scalable=no">
 <meta http-equiv="Content-Security-Policy"
   content="default-src 'none';
@@ -352,6 +382,7 @@ ${isZMachine ? `<script src="${zvmJs}"></script><script src="${zvmDbgJs}"></scri
     };
 
     // Messages from extension host
+    vscode.postMessage({ type: 'ready' });
     window.addEventListener('message', function (event) {
         var msg = event.data;
 
@@ -647,10 +678,8 @@ ${isZMachine ? `<script src="${zvmJs}"></script><script src="${zvmDbgJs}"></scri
         });
     }
 
-    dispose(): void {
-        if (this._disposed) { return; }
-        this._disposed = true;
-        // Resolve any outstanding property-read / write / decode promises so callers don't hang.
+    /** Resolve any outstanding property-read / write / decode promises so callers don't hang. */
+    private settlePending(): void {
         for (const resolve of this.pendingPropReads.values()) { resolve(null); }
         this.pendingPropReads.clear();
         for (const resolve of this.pendingWordReads.values()) { resolve(null); }
@@ -663,6 +692,25 @@ ${isZMachine ? `<script src="${zvmJs}"></script><script src="${zvmDbgJs}"></scri
         this.pendingAttrReads.clear();
         for (const resolve of this.pendingDictWords.values()) { resolve(null); }
         this.pendingDictWords.clear();
+    }
+
+    /**
+     * Tear this instance down but leave the webview panel open, and hand it back so the
+     * next debug session can take it over in place. Detaching the listeners first means
+     * no onClose/terminated event fires for the handover.
+     */
+    release(): vscode.WebviewPanel {
+        this._disposed = true;
+        this.settlePending();
+        this.disposables.forEach(d => d.dispose());
+        this.disposables = [];
+        return this.panel;
+    }
+
+    dispose(): void {
+        if (this._disposed) { return; }
+        this._disposed = true;
+        this.settlePending();
         this.disposables.forEach(d => d.dispose());
         this.disposables = [];
         this.panel.dispose(); // close the VS Code webview panel

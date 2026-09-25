@@ -5,30 +5,88 @@
 # so it emits a real Inform 6 `.dbg` (a bindingless program has no Main and can't).
 # We keep the three artifacts the harness loads: .bgldbg, .transpiled.inf, .transpiled.inf.dbg.
 #
-# Usage: tools/gen-debug-fixtures.sh [path-to-beguiler-repo]
+# Usage: tools/gen-debug-fixtures.sh [--check] [path-to-beguiler-repo]
+#
+#   (no flag)  regenerate the fixtures in place
+#   --check    regenerate to the same scratch dir and DIFF against the committed
+#              fixtures, exiting non-zero on any difference. Nothing is written.
+#
+# --check is what makes fixture staleness loud. The harnesses themselves compile
+# nothing: they read these committed bytes, so a fixture that no longer matches
+# what the compiler emits still passes. Only this comparison can say otherwise.
+#
+# Generation is deterministic, which is what lets --check be trustworthy:
+#   - the build dir is a fixed path, not mktemp -d, because the source path is
+#     recorded inside the .bgldbg and the I6 .dbg;
+#   - each program pins `Serial` below, because I6 otherwise stamps the build
+#     date into the story file and the .dbg, so fixtures would differ by day.
+# Regenerating with no real change must produce an empty diff. If it does not,
+# something above has regressed and --check is crying wolf — fix it there.
 set -euo pipefail
 
-BEG="${1:-$(cd "$(dirname "$0")/../../beguiler" && pwd)}"
-LIB_I6="$(cd "$BEG/../inform6/lib" && pwd)"
-FIX="$(cd "$(dirname "$0")/.." && pwd)/src/test/fixtures"
+MODE=generate
+BEGARG=""
+for a in "$@"; do
+  case "$a" in
+    --check) MODE=check ;;
+    *)       BEGARG="$a" ;;
+  esac
+done
+
+BEG="${BEGARG:-$(cd "$(dirname "$0")/../../beguiler" 2>/dev/null && pwd)}"
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+FIX="$ROOT/src/test/fixtures"
 BIN="$BEG/beguiler"
 BLIB="$BEG/beguiLib"
+
+# Fixed, not mktemp -d: this path is embedded in the generated debug files.
+TMP="$ROOT/.fixture-build"
+
+# Any 6-digit date. Fixed so the story file and .dbg do not change by the day.
+SERIAL_PIN="200101"
+
+if [ ! -x "$BIN" ]; then
+  echo "SKIP: no beguiler binary at $BIN - cannot ${MODE} fixtures."
+  echo "      (build it with: make -C \"$BEG\")"
+  exit 0
+fi
+if [ ! -d "$BEG/../inform6/stdlib" ]; then
+  echo "SKIP: no I6 standard library at $BEG/../inform6/stdlib - cannot ${MODE} fixtures."
+  echo "      (git submodule update --init inform6/stdlib)"
+  exit 0
+fi
+LIB_I6="$(cd "$BEG/../inform6/stdlib" && pwd)"
+
 mkdir -p "$FIX"
-TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
+rm -rf "$TMP"; mkdir -p "$TMP"; trap 'rm -rf "$TMP"' EXIT
+
+DRIFT=0
+# Copy a freshly built artifact into the fixture set, or in --check mode compare it.
+emit() {  # $1=built file  $2=committed fixture path
+  if [ "$MODE" = check ]; then
+    if [ ! -f "$2" ]; then
+      echo "  DRIFT: $(basename "$2") - no committed fixture"; DRIFT=1
+    elif ! cmp -s "$1" "$2"; then
+      echo "  DRIFT: $(basename "$2")"; DRIFT=1
+    fi
+  else
+    cp "$1" "$2"
+  fi
+}
 
 gen() {  # $1=fixture-name  $2=beguile-source
   local name="$1" src="$2" stem out
   stem="$(basename "$src" .bgl)"
   out="$TMP/$name"
   "$BIN" --debug "$src" -lib="$BLIB" -o "$out" >/dev/null
-  cp "$out/$stem.bgl.bgldbg"             "$FIX/$name.bgl.bgldbg"
-  cp "$out/$stem.bgl.transpiled.inf"     "$FIX/$name.bgl.transpiled.inf"
-  cp "$out/$stem.bgl.transpiled.inf.dbg" "$FIX/$name.bgl.transpiled.inf.dbg"
-  # Story file (for the RUNTIME harness): copy whichever the target produced (.z8 / .ulx).
-  rm -f "$FIX/$name.z8" "$FIX/$name.ulx"
+  emit "$out/$stem.bgl.bgldbg"             "$FIX/$name.bgl.bgldbg"
+  emit "$out/$stem.bgl.transpiled.inf"     "$FIX/$name.bgl.transpiled.inf"
+  emit "$out/$stem.bgl.transpiled.inf.dbg" "$FIX/$name.bgl.transpiled.inf.dbg"
+  # Story file (for the RUNTIME harness): whichever the target produced (.z8 / .ulx).
+  [ "$MODE" = check ] || rm -f "$FIX/$name.z8" "$FIX/$name.ulx"
   local story=""
   for ext in z8 ulx zblorb; do
-    if [ -f "$out/$stem.$ext" ]; then story="$out/$stem.$ext"; cp "$story" "$FIX/$name.$ext"; break; fi
+    if [ -f "$out/$stem.$ext" ]; then story="$out/$stem.$ext"; emit "$story" "$FIX/$name.$ext"; break; fi
   done
   echo "  ✓ $name${story:+ (+$(basename "$story"|sed 's/.*\.//') story)}"
 }
@@ -36,6 +94,7 @@ gen() {  # $1=fixture-name  $2=beguile-source
 # superposed: exercises a superposed core routine (bgl.util.math) — the anchor-bug regression target.
 cat > "$TMP/superposed.bgl" <<EOF
 #beguilerSettings { target=Glulx; title="SPMap"; includePaths ="$LIB_I6"; }
+#i6 { Serial "$SERIAL_PIN"; }
 #includeI6 "parser"
 #includeI6 "verblib"
 void initialise(){
@@ -51,6 +110,7 @@ gen superposed "$TMP/superposed.bgl"
 # the variable-type checks — NOT the `initialise` entry point (I6 renames it `Initialise`).
 cat > "$TMP/locals.bgl" <<EOF
 #beguilerSettings { target=Glulx; title="Locals"; includePaths ="$LIB_I6"; }
+#i6 { Serial "$SERIAL_PIN"; }
 #includeI6 "parser"
 #includeI6 "verblib"
 int mix(int p){
@@ -70,6 +130,7 @@ gen locals "$TMP/locals.bgl"
 # HIDDEN from the Variables pane — the scratch-leak regression.
 cat > "$TMP/forin.bgl" <<EOF
 #beguilerSettings { target=Glulx; title="ForIn"; includePaths ="$LIB_I6"; }
+#i6 { Serial "$SERIAL_PIN"; }
 #includeI6 "parser"
 #includeI6 "verblib"
 int sumit(){
@@ -86,6 +147,7 @@ gen forin "$TMP/forin.bgl"
 # (hidden) and documents the not-yet-displayed spilled locals a13..a18.
 cat > "$TMP/spillz.bgl" <<EOF
 #beguilerSettings { target=Z8; title="SpillZ"; includePaths ="$LIB_I6"; }
+#i6 { Serial "$SERIAL_PIN"; }
 #includeI6 "parser"
 #includeI6 "verblib"
 int spill(int p){
@@ -104,6 +166,7 @@ gen spillz "$TMP/spillz.bgl"
 rt_body() {  # $1 = target
 cat <<EOF
 #beguilerSettings { target=$1; title="RtCalls"; includePaths ="$LIB_I6"; }
+#i6 { Serial "$SERIAL_PIN"; }
 #includeI6 "parser"
 #includeI6 "verblib"
 int add(int a, int b){
@@ -127,4 +190,16 @@ EOF
 rt_body Z8    > "$TMP/rt_calls_z.bgl"; gen rt_calls_z "$TMP/rt_calls_z.bgl"
 rt_body Glulx > "$TMP/rt_calls_g.bgl"; gen rt_calls_g "$TMP/rt_calls_g.bgl"
 
-echo "fixtures regenerated in $FIX"
+if [ "$MODE" = check ]; then
+  if [ "$DRIFT" -ne 0 ]; then
+    echo ""
+    echo "FIXTURES ARE STALE - the committed fixtures no longer match what the"
+    echo "compiler emits. The harnesses cannot detect this on their own; they"
+    echo "read these bytes rather than producing any."
+    echo "Refresh them with:  tools/gen-debug-fixtures.sh"
+    exit 1
+  fi
+  echo "fixtures up to date"
+else
+  echo "fixtures regenerated in $FIX"
+fi

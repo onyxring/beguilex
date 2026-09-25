@@ -1,147 +1,201 @@
 [map]
-9	/Users/jim/projects/IF-Projects/beguiler/beguiLib/core/__beguileCore.bgl	203
-13	/Users/jim/projects/IF-Projects/beguiler/beguiLib/core/_attribute.bgl	23
-14	/Users/jim/projects/IF-Projects/beguiler/beguiLib/core/_glulxCore.bgl	18
-16	/Users/jim/projects/IF-Projects/beguiler/beguiLib/core/__beguileCore.bgl	49
-19	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	33
-20	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	34
-21	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	35
-22	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	36
-23	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	37
-24	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	38
-25	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	39
-19	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	33
-29	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	145
-30	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	145
-33	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	146
-36	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	154
-37	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	155
-38	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	156
-39	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	157
-40	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	158
-43	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	161
-44	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	162
-45	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	163
-46	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	164
-49	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	172
-50	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	173
-51	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	174
-52	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	174
-54	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	175
-55	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	176
-57	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	177
-60	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	183
-61	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	184
-62	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	185
-65	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	189
-66	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	190
-67	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	190
-69	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	191
-72	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	195
-73	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	196
-74	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	196
-76	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	198
-79	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	202
-80	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	203
-81	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	204
-82	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	205
-83	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	206
-85	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	209
-89	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	226
-90	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	227
-91	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	228
-92	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	228
-95	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	229
-98	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	234
-99	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	235
-100	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	235
-102	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	236
-105	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	242
-106	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	243
-107	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	244
-110	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	250
-111	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	251
-112	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	252
-113	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	253
-117	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	259
-118	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	260
-119	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	260
-121	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	261
-122	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	262
-123	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	263
-126	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	270
-127	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	271
-128	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	271
-130	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	272
-131	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	272
-133	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	274
-134	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	274
-136	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	275
-137	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	276
-138	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	277
-141	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	283
-144	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	292
-145	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	293
-146	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	293
-148	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	295
-149	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	295
-151	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	298
-152	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	299
-155	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	306
-156	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	307
-157	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	308
-158	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	309
-159	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	310
-160	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	311
-163	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	314
-168	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	332
-171	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	336
-172	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	336
-174	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	337
-175	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	338
-176	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	339
-179	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	343
-182	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	347
-185	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	351
-186	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	351
-188	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	352
-191	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	356
-192	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	357
-193	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	357
-195	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	358
-198	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	362
-199	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	363
-200	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	363
-202	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	364
-203	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	365
-204	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	366
-207	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	377
-208	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	378
-209	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	379
-210	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	380
-211	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	381
-212	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	382
-213	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	383
-215	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	385
-27	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	141
-219	/Users/jim/projects/IF-Projects/beguiler/beguiLib/bglWorld.bgl	44
-222	/private/var/folders/7v/6j9qk1gx5mgdnwmpnfn5v2nr0000gn/T/tmp.yHVcyYScbR/superposed.bgl	4
-223	/private/var/folders/7v/6j9qk1gx5mgdnwmpnfn5v2nr0000gn/T/tmp.yHVcyYScbR/superposed.bgl	5
-224	/private/var/folders/7v/6j9qk1gx5mgdnwmpnfn5v2nr0000gn/T/tmp.yHVcyYScbR/superposed.bgl	6
-225	/private/var/folders/7v/6j9qk1gx5mgdnwmpnfn5v2nr0000gn/T/tmp.yHVcyYScbR/superposed.bgl	7
-226	/private/var/folders/7v/6j9qk1gx5mgdnwmpnfn5v2nr0000gn/T/tmp.yHVcyYScbR/superposed.bgl	7
-222	/private/var/folders/7v/6j9qk1gx5mgdnwmpnfn5v2nr0000gn/T/tmp.yHVcyYScbR/superposed.bgl	4
-229	/Users/jim/projects/IF-Projects/beguiler/beguiLib/core/_math.bgl	95
-230	/Users/jim/projects/IF-Projects/beguiler/beguiLib/core/_math.bgl	95
-231	/Users/jim/projects/IF-Projects/beguiler/beguiLib/core/_math.bgl	95
-233	/Users/jim/projects/IF-Projects/beguiler/beguiLib/core/_math.bgl	95
-235	/Users/jim/projects/IF-Projects/beguiler/beguiLib/core/_math.bgl	94
-236	/Users/jim/projects/IF-Projects/beguiler/beguiLib/core/_math.bgl	94
-237	/Users/jim/projects/IF-Projects/beguiler/beguiLib/core/_math.bgl	94
-239	/Users/jim/projects/IF-Projects/beguiler/beguiLib/core/_math.bgl	94
+8	/Users/jim/projects/IF-Projects/beguiler/beguiLib/core/__beguileCore.bgl	76
+12	/Users/jim/projects/IF-Projects/beguiler/beguiLib/core/_attribute.bgl	23
+13	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	33
+14	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	34
+15	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	35
+16	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	36
+17	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	37
+18	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	38
+13	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	33
+22	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	158
+25	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	159
+28	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	167
+29	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	168
+30	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	169
+31	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	170
+34	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	173
+35	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	174
+36	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	175
+37	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	176
+40	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	184
+41	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	185
+42	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	186
+43	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	186
+45	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	187
+46	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	188
+48	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	189
+51	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	195
+52	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	196
+53	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	197
+56	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	205
+57	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	206
+58	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	206
+60	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	207
+63	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	211
+64	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	212
+65	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	212
+67	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	214
+70	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	218
+71	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	219
+72	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	220
+73	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	221
+74	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	222
+76	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	225
+80	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	254
+81	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	255
+82	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	256
+83	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	257
+84	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	257
+86	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	258
+87	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	259
+88	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	260
+89	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	261
+90	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	262
+91	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	263
+93	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	265
+96	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	274
+97	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	274
+98	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	274
+100	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	279
+101	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	280
+104	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	290
+105	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	291
+106	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	291
+108	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	292
+109	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	292
+111	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	293
+114	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	300
+115	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	300
+117	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	303
+118	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	304
+119	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	304
+123	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	310
+124	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	311
+125	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	312
+128	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	318
+129	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	319
+130	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	320
+131	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	321
+135	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	331
+136	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	332
+137	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	332
+139	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	333
+140	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	334
+141	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	335
+144	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	342
+145	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	343
+146	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	343
+148	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	344
+149	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	344
+151	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	349
+152	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	349
+154	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	353
+155	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	354
+156	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	355
+157	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	356
+160	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	362
+163	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	375
+166	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	379
+167	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	380
+168	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	380
+170	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	381
+171	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	383
+172	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	383
+174	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	386
+175	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	387
+178	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	394
+179	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	395
+180	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	396
+181	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	397
+182	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	400
+183	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	401
+184	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	401
+186	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	402
+187	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	403
+188	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	404
+189	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	405
+190	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	406
+191	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	407
+192	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	408
+194	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	410
+195	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	411
+196	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	412
+199	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	415
+204	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	433
+207	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	437
+208	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	437
+210	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	438
+211	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	439
+212	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	440
+215	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	444
+218	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	448
+221	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	452
+222	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	452
+224	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	453
+227	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	457
+228	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	458
+229	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	458
+231	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	459
+234	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	463
+235	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	464
+236	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	464
+238	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	465
+239	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	466
+240	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	467
+243	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	481
+244	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	481
+247	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	482
+251	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	492
+252	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	493
+253	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	494
+254	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	495
+255	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	496
+258	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	500
+259	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	501
+260	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	502
+261	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	503
+262	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	504
+263	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	505
+264	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	506
+266	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	508
+20	/Users/jim/projects/IF-Projects/beguiler/beguiLib/array.bgl	154
+270	/Users/jim/projects/IF-Projects/beguiler/beguiLib/core/_bglWorld.bgl	44
+271	/Users/jim/projects/IF-Projects/beguiler/beguiLib/core/_glulxCore.bgl	19
+273	/Users/jim/projects/IF-Projects/beguiler/beguiLib/core/__beguileCore.bgl	42
+276	/Users/jim/projects/IF-Projects/beguilex/.fixture-build/superposed.bgl	2
+279	/Users/jim/projects/IF-Projects/beguilex/.fixture-build/superposed.bgl	5
+280	/Users/jim/projects/IF-Projects/beguilex/.fixture-build/superposed.bgl	6
+281	/Users/jim/projects/IF-Projects/beguilex/.fixture-build/superposed.bgl	7
+282	/Users/jim/projects/IF-Projects/beguilex/.fixture-build/superposed.bgl	8
+283	/Users/jim/projects/IF-Projects/beguilex/.fixture-build/superposed.bgl	8
+279	/Users/jim/projects/IF-Projects/beguilex/.fixture-build/superposed.bgl	5
+286	/Users/jim/projects/IF-Projects/beguiler/beguiLib/core/_float.bgl	56
+287	/Users/jim/projects/IF-Projects/beguiler/beguiLib/core/_float.bgl	57
+288	/Users/jim/projects/IF-Projects/beguiler/beguiLib/core/_float.bgl	58
+289	/Users/jim/projects/IF-Projects/beguiler/beguiLib/core/_float.bgl	59
+290	/Users/jim/projects/IF-Projects/beguiler/beguiLib/core/_float.bgl	60
+291	/Users/jim/projects/IF-Projects/beguiler/beguiLib/core/_float.bgl	61
+293	/Users/jim/projects/IF-Projects/beguiler/beguiLib/core/_float.bgl	172
+294	/Users/jim/projects/IF-Projects/beguiler/beguiLib/core/_float.bgl	173
+296	/Users/jim/projects/IF-Projects/beguiler/beguiLib/core/_float.bgl	166
+297	/Users/jim/projects/IF-Projects/beguiler/beguiLib/core/_float.bgl	167
+299	/Users/jim/projects/IF-Projects/beguiler/beguiLib/core/_math.bgl	95
+300	/Users/jim/projects/IF-Projects/beguiler/beguiLib/core/_math.bgl	95
+301	/Users/jim/projects/IF-Projects/beguiler/beguiLib/core/_math.bgl	95
+303	/Users/jim/projects/IF-Projects/beguiler/beguiLib/core/_math.bgl	95
+305	/Users/jim/projects/IF-Projects/beguiler/beguiLib/core/_math.bgl	94
+306	/Users/jim/projects/IF-Projects/beguiler/beguiLib/core/_math.bgl	94
+307	/Users/jim/projects/IF-Projects/beguiler/beguiLib/core/_math.bgl	94
+309	/Users/jim/projects/IF-Projects/beguiler/beguiLib/core/_math.bgl	94
 [sym]
+_bglarraycompareasc	_bglarraycompareasc	function
+_bglarray	_bglarray	object
+_bglworldbufidx	_bglworldbufidx	global
 _bglmin	_bglmin	function
 _bglmax	_bglmax	function
+_bglfloatlt	_bglfloatlt	function
+_bglfloatgt	_bglfloatgt	function
 _glulx	_glulx	object
 _glulx.ewintype	ewintype	property
 _glulx.eimgalign	eimgalign	property
@@ -151,18 +205,24 @@ _glulx.bwinplacement	bwinplacement	property
 _glulx.bwinscale	bwinscale	property
 _glulx.estyletype	estyletype	property
 bgl	bgl	object
-bgl.ui	ui	property
 bgl.glulx	glulx	property
+bgl.world	world	property
+bgl.printrules	printrules	property
+bgl.ui	ui	property
 bgl.asm	asm	property
 bgl.util	util	property
-bgl.world	world	property
-_bglarraycompareasc	_bglarraycompareasc	function
-_bglarray	_bglarray	object
-_bglworldbufidx	_bglworldbufidx	global
 initialise	initialise	function
 no_attribute	no_attribute	global
+name	name	global
 sp	sp	global
 [types]
+enum etype
+  value unknown 0
+  value int 1
+  value string 2
+  value routine 3
+  value object 4
+  value class 5
 enum bglulxwindowmethodflags
 enum eglulxwindowtype
   value textgrid 4
@@ -174,7 +234,6 @@ enum eglulximagealign
   value inlinecenter 3
   value marginleft 4
   value marginright 5
-  value margincenter 6
 enum bglulxwindowborder
   value border 0
   value noborder 256
@@ -189,24 +248,261 @@ enum bglulxwindowscale
 enum eglulximagedimension
   value original -1
   value scaled -2
+enum eglulxeventtype
+  value none 0
+  value timer 1
+  value charinput 2
+  value lineinput 3
+  value mouseinput 4
+  value arrange 5
+  value redraw 6
+  value soundnotify 7
+  value hyperlink 8
+  value volumenotify 9
 enum eglulxstyletype
-  value normal 1
-  value emphasized 2
-  value fixed 3
-  value header 4
-  value subheader 5
-  value alert 6
-  value note 7
-  value blockquote 8
-  value input 9
-  value user1 10
-  value user2 11
+  value normal 0
+  value emphasized 1
+  value fixed 2
+  value header 3
+  value subheader 4
+  value alert 5
+  value note 6
+  value blockquote 7
+  value input 8
+  value user1 9
+  value user2 10
+enum eimages
+enum esounds
+enum eunknownasset
 type verb
   prop grammar grammar grammarrulelist
   prop meta meta bool
   prop priority priority int
+type _bglaccessor0
+  prop _id _id int
+type _bglaccessor1
+  prop _id _id int
+type _bglaccessor2
+  prop _h _h int
+  prop _win _win int
+type bglopcodes
+type bglsize
+  prop width width int
+  prop height height int
+type _bglmainwindow
+  prop id id _bglaccessor0
+type _bglstatus
+  prop id id _bglaccessor1
+  prop height height _bglaccessor2
 type bgl
   prop glulx glulx _glulx
+routine _bglcharislower
+  local c char slot
+routine _bglcharisupper
+  local c char slot
+routine _bglcharisalpha
+  local c char slot
+routine _bglcharisnumeric
+  local c char slot
+routine _bglcharisalphanumeric
+  local c char slot
+routine _bglcharisvowel
+  local c char slot
+  local v char slot
+  local _bglfi0 var slot synthetic
+routine _bglcharisconsonant
+  local c char slot
+routine _bglchartolower
+  local c char slot
+routine _bglchartoupper
+  local c char slot
+routine _bglprintuint
+  local v int slot
+routine _bglarraycompareasc
+  local lhs var slot
+  local rhs var slot
+routine _bglArray.rawget
+  local addr var slot
+  local slot var slot
+routine _bglArray.rawset
+  local addr var slot
+  local slot var slot
+  local v var slot
+routine _bglArray.get
+  local obj var slot
+  local prop var slot
+  local n int slot
+routine _bglArray.set
+  local obj var slot
+  local prop var slot
+  local n int slot
+  local v var slot
+routine _bglArray.copy
+  local dobj var slot
+  local dprop var slot
+  local sobj var slot
+  local sprop var slot
+  local n int slot
+  local cap int slot
+  local i int slot
+routine _bglArray.istracked
+  local obj var slot
+  local prop var slot
+  local hdr var slot
+routine _bglArray.size
+  local obj var slot
+  local prop var slot
+routine _bglArray.length
+  local obj var slot
+  local prop var slot
+routine _bglArray.setlength
+  local obj var slot
+  local prop var slot
+  local n int slot
+routine _bglArray.indexof
+  local obj var slot
+  local prop var slot
+  local val var slot
+  local op var slot
+  local len int slot
+  local t int slot
+routine _bglArray.setowned
+  local obj var slot
+  local prop var slot
+  local n int slot
+  local v var slot
+  local assign func<var,var,var> slot
+routine _bglArray.clear
+  local obj var slot
+  local prop var slot
+  local dtor var slot
+  local sz int slot
+  local t int slot
+routine _bglArray.freeall
+  local obj var slot
+  local prop var slot
+  local dtor var slot
+  local sz int slot
+  local t int slot
+routine _bglArray.swap
+  local obj var slot
+  local prop var slot
+  local pos1 int slot
+  local pos2 int slot
+  local tmp var slot
+routine _bglArray.reverse
+  local obj var slot
+  local prop var slot
+  local len int slot
+  local half int slot
+  local i int slot
+routine _bglArray.append
+  local obj var slot
+  local prop var slot
+  local val var slot
+  local assign var slot
+  local len int slot
+routine _bglArray.insert
+  local obj var slot
+  local prop var slot
+  local pos int slot
+  local val var slot
+  local assign var slot
+  local len int slot
+  local i int slot
+routine _bglArray.prepend
+  local obj var slot
+  local prop var slot
+  local val var slot
+  local assign var slot
+routine _bglArray.destroyvalue
+  local dtor var slot
+  local v var slot
+routine _bglArray.remove
+  local obj var slot
+  local prop var slot
+  local pos int slot
+  local dtor var slot
+  local len int slot
+  local i int slot
+routine _bglArray.removevalue
+  local obj var slot
+  local prop var slot
+  local val var slot
+  local op var slot
+  local dtor var slot
+  local pos int slot
+  local len int slot
+routine _bglArray.push
+  local obj var slot
+  local prop var slot
+  local val var slot
+routine _bglArray.pop
+  local obj var slot
+  local prop var slot
+  local v var slot
+routine _bglArray.dequeue
+  local obj var slot
+  local prop var slot
+routine _bglArray.enqueue
+  local obj var slot
+  local prop var slot
+  local val var slot
+routine _bglArray.peek
+  local obj var slot
+  local prop var slot
+routine _bglArray.peekend
+  local obj var slot
+  local prop var slot
+  local len int slot
+routine _bglArray.popend
+  local obj var slot
+  local prop var slot
+  local len int slot
+  local v var slot
+routine _bglArray.sortdefault
+  local obj var slot
+  local prop var slot
+  local cmp func<int,var,var> slot
+routine _bglArray.invokecompare
+  local cmp var slot
+  local a var slot
+  local b var slot
+routine _bglArray.sort
+  local obj var slot
+  local prop var slot
+  local compare func<int,var,var> slot
+  local len int slot
+  local i int slot
+routine _bglworldnextbuf
+routine _bglworldstamp
+  local buf array<object> slot
+  local count int slot
+routine _bglworldgetall
+  local pred var slot
+  local buf array<object> slot
+  local o object slot
+  local n int slot
+routine _bglworldinstances
+  local cls var slot
+  local pred var slot
+  local buf array<object> slot
+  local o object slot
+  local n int slot
+routine _bglworldinparent
+  local parent object slot
+  local pred var slot
+  local buf array<object> slot
+  local o object slot
+  local n int slot
+routine _bglWorld.getall
+  local pred func<bool,object> slot
+routine _bglWorld.inparent
+  local p object slot
+  local pred func<bool,object> slot
+routine _bglWorld.instances
+  local cls var slot
+  local pred func<bool,object> slot
 routine _bglunsignedcompare
   local x int slot
   local y int slot
@@ -250,28 +546,196 @@ routine _bglclamp
   local hi int slot
 routine _bglsign
   local v int slot
-routine _bglprintuint
+routine typeof
+  local v var slot
+routine _bglaccessor0::_opconv
+routine _bglaccessor0::_opeq
+  local newid int slot
+routine _bglaccessor1::_opconv
+routine _bglaccessor1::_opeq
+  local newid int slot
+routine _bglaccessor2::_opconv
+routine _bglaccessor2::_opeq
   local v int slot
-routine _bglcharislower
-  local c char slot
-routine _bglcharisupper
-  local c char slot
-routine _bglcharisalpha
-  local c char slot
-routine _bglcharisnumeric
-  local c char slot
-routine _bglcharisalphanumeric
-  local c char slot
-routine _bglcharisvowel
-  local c char slot
-  local v char slot
-  local _bglfi0 var slot synthetic
-routine _bglcharisconsonant
-  local c char slot
-routine _bglchartolower
-  local c char slot
-routine _bglchartoupper
-  local c char slot
+  local winmethod bglulxwindowmethodflags slot
+routine bglOpCodes::bitxor
+  local a int slot
+  local b int slot
+  local result int slot
+routine bglOpCodes::shiftl
+  local a int slot
+  local b int slot
+  local result int slot
+routine bglOpCodes::sshiftr
+  local a int slot
+  local b int slot
+  local result int slot
+routine bglOpCodes::ushiftr
+  local a int slot
+  local b int slot
+  local result int slot
+routine bglOpCodes::aload
+  local addr int slot
+  local idx int slot
+  local result int slot
+routine bglOpCodes::aloads
+  local addr int slot
+  local idx int slot
+  local result int slot
+routine bglOpCodes::aloadb
+  local addr int slot
+  local idx int slot
+  local result int slot
+routine bglOpCodes::aloadbit
+  local addr int slot
+  local idx int slot
+  local result int slot
+routine bglOpCodes::sexs
+  local v int slot
+  local result int slot
+routine bglOpCodes::sexb
+  local v int slot
+  local result int slot
+routine bglOpCodes::stkcount
+  local result int slot
+routine bglOpCodes::stkpeek
+  local idx int slot
+  local result int slot
+routine bglOpCodes::callf
+  local addr int slot
+  local result int slot
+routine bglOpCodes::callfi
+  local addr int slot
+  local a int slot
+  local result int slot
+routine bglOpCodes::callfii
+  local addr int slot
+  local a int slot
+  local b int slot
+  local result int slot
+routine bglOpCodes::callfiii
+  local addr int slot
+  local a int slot
+  local b int slot
+  local c int slot
+  local result int slot
+routine bglOpCodes::getstringtbl
+  local result int slot
+routine bglOpCodes::getmemsize
+  local result int slot
+routine bglOpCodes::setmemsize
+  local size int slot
+  local result int slot
+routine bglOpCodes::malloc
+  local size int slot
+  local result int slot
+routine bglOpCodes::linearsearch
+  local key int slot
+  local keysize int slot
+  local start int slot
+  local structsize int slot
+  local numstructs int slot
+  local keyoffset int slot
+  local options int slot
+  local result int slot
+routine bglOpCodes::binarysearch
+  local key int slot
+  local keysize int slot
+  local start int slot
+  local structsize int slot
+  local numstructs int slot
+  local keyoffset int slot
+  local options int slot
+  local result int slot
+routine bglOpCodes::linkedsearch
+  local key int slot
+  local keysize int slot
+  local start int slot
+  local keyoffset int slot
+  local nextoffset int slot
+  local options int slot
+  local result int slot
+routine bglOpCodes::random
+  local range int slot
+  local result int slot
+routine bglOpCodes::save
+  local stream int slot
+  local result int slot
+routine bglOpCodes::restore
+  local stream int slot
+  local result int slot
+routine bglOpCodes::saveundo
+  local result int slot
+routine bglOpCodes::restoreundo
+  local result int slot
+routine bglOpCodes::verify
+  local result int slot
+routine bglOpCodes::numtof
+  local n int slot
+  local result int slot
+routine bglOpCodes::ftonumz
+  local f int slot
+  local result int slot
+routine bglOpCodes::ftonumn
+  local f int slot
+  local result int slot
+routine bglOpCodes::fadd
+  local a int slot
+  local b int slot
+  local result int slot
+routine bglOpCodes::fsub
+  local a int slot
+  local b int slot
+  local result int slot
+routine bglOpCodes::fmul
+  local a int slot
+  local b int slot
+  local result int slot
+routine bglOpCodes::fdiv
+  local a int slot
+  local b int slot
+  local result int slot
+routine bglOpCodes::ceil
+  local f int slot
+  local result int slot
+routine bglOpCodes::floor
+  local f int slot
+  local result int slot
+routine bglOpCodes::sqrt
+  local f int slot
+  local result int slot
+routine bglOpCodes::exp
+  local f int slot
+  local result int slot
+routine bglOpCodes::log
+  local f int slot
+  local result int slot
+routine bglOpCodes::pow
+  local a int slot
+  local b int slot
+  local result int slot
+routine bglOpCodes::sin
+  local f int slot
+  local result int slot
+routine bglOpCodes::cos
+  local f int slot
+  local result int slot
+routine bglOpCodes::tan
+  local f int slot
+  local result int slot
+routine bglOpCodes::asin
+  local f int slot
+  local result int slot
+routine bglOpCodes::acos
+  local f int slot
+  local result int slot
+routine bglOpCodes::atan
+  local f int slot
+  local result int slot
+routine bglOpCodes::atan2
+  local a int slot
+  local b int slot
+  local result int slot
 routine __glkhook
   local _vararg_count int slot
   local api int slot
@@ -364,40 +828,14 @@ routine _bglfloatprintdecimal
   local ipart int slot
   local frac float slot
   local fdigits int slot
-routine _bglarraycompareasc
-  local lhs var slot
-  local rhs var slot
-routine _bglworldnextbuf
-routine _bglworldstamp
-  local buf array<object> slot
-  local count int slot
-routine _bglworldgetall
-  local pred var slot
-  local buf array slot
-  local o object slot
-  local n int slot
-routine _bglworldinstances
-  local cls var slot
-  local pred var slot
-  local buf array slot
-  local o object slot
-  local n int slot
-routine _bglworldinparent
-  local parent object slot
-  local pred var slot
-  local buf array slot
-  local o object slot
-  local n int slot
+routine bglSize::_opeq
+  local s bglsize slot
 routine initialise
   local a int slot
   local b int slot
 global no_attribute attribute
 global _bglvowels bytearray
-global _bglui _bglobject
-global sp var
-global _glulx _bglobject
-global _bglutil _bglobject
-global bgl _bglobject
+global name property
 global _bglarray object
 global _bglworldbuf0 array
 global _bglworldbuf1 array
@@ -405,3 +843,11 @@ global _bglworldbuf2 array
 global _bglworldbuf3 array
 global _bglworldbufidx int
 global _bglworld _bglobject
+global _bglmainwindow _bglobject
+global _bglprintrules _bglobject
+global _bglstatus _bglobject
+global _bglui _bglobject
+global sp var
+global _glulx _bglobject
+global bgl _bglobject
+global _bglutil _bglobject

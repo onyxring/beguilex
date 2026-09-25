@@ -539,7 +539,7 @@ function libPaths(): void {
     const libFiles = files.filter(f => !f.endsWith('.bgl.transpiled.inf'));
     const missing = libFiles.filter(f => !fs.existsSync(f));
     eq(missing.length, 0, `libpaths: every library .inf resolves to a real path (missing: ${missing.map(f => path.basename(f)).join(',') || 'none'})`);
-    ok(files.some(f => f.replace(/\\/g, '/').includes('/inform6/lib/') && f.endsWith('parser.h')),
+    ok(files.some(f => f.replace(/\\/g, '/').includes('/inform6/stdlib/') && f.endsWith('parser.h')),
        'libpaths: parser.h resolved via ++include_path (not the output-folder fallback)');
 }
 

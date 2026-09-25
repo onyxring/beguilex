@@ -31,18 +31,27 @@ const Z_MACHINE_EXTS = new Set(['.z3', '.z5', '.z6', '.z8', '.zblorb']);
 export class GamePanel {
     static readonly viewType = 'beguile.gamePanel';
 
+    /** The panel from the previous Play, so a re-run replaces it instead of stacking. */
+    private static current: GamePanel | undefined;
+
     private panel: vscode.WebviewPanel;
+    private context: vscode.ExtensionContext;
     private disposables: vscode.Disposable[] = [];
 
     static create(context: vscode.ExtensionContext, storyPath: string): GamePanel {
         const ext = path.extname(storyPath).toLowerCase();
         const isZMachine = Z_MACHINE_EXTS.has(ext);
         const nmRoot = path.join(context.extensionPath, 'node_modules');
+        const title = `Play: ${path.basename(storyPath)}`;
 
-        const panel = vscode.window.createWebviewPanel(
+        // Take over the previous panel where it stands. Only reuse preserves a placement
+        // the user chose by dragging — a ViewColumn cannot name a detached window, and
+        // there is no API that can open one there.
+        const reuse = GamePanel.current?.release();
+        const panel = reuse ?? vscode.window.createWebviewPanel(
             GamePanel.viewType,
-            `Play: ${path.basename(storyPath)}`,
-            vscode.ViewColumn.Beside,
+            title,
+            context.globalState.get<vscode.ViewColumn>('gamePanelColumn', vscode.ViewColumn.Beside),
             {
                 enableScripts: true,
                 retainContextWhenHidden: true,
@@ -52,8 +61,13 @@ export class GamePanel {
                 ]
             }
         );
+        if (reuse) {
+            reuse.title = title;
+            reuse.reveal(undefined, false); // undefined column = stay put; take focus
+        }
 
-        return new GamePanel(panel, context, storyPath, isZMachine);
+        GamePanel.current = new GamePanel(panel, context, storyPath, isZMachine);
+        return GamePanel.current;
     }
 
     private constructor(
@@ -63,8 +77,20 @@ export class GamePanel {
         isZMachine: boolean
     ) {
         this.panel = panel;
+        this.context = context;
         this.panel.webview.html = this.buildHtml(context, isZMachine);
-        this.panel.onDidDispose(() => this.dispose(), null, this.disposables);
+        this.panel.onDidDispose(() => {
+            if (GamePanel.current === this) { GamePanel.current = undefined; }
+            this.dispose();
+        }, null, this.disposables);
+
+        // Track the column as it moves, so a Play that has to create a fresh panel opens
+        // it where the last one was left.
+        this.panel.onDidChangeViewState(e => {
+            if (e.webviewPanel.viewColumn !== undefined) {
+                this.context.globalState.update('gamePanelColumn', e.webviewPanel.viewColumn);
+            }
+        }, null, this.disposables);
 
         const sendTheme = () => this.panel.webview.postMessage(
             { type: 'setTheme', ...themeColors(resolveIsLight()) }
@@ -74,8 +100,10 @@ export class GamePanel {
             if (e.affectsConfiguration('beguile.interpreterTheme')) sendTheme();
         }, null, this.disposables);
 
-        // Give the WebView time to load its scripts before sending story data
-        setTimeout(() => {
+        // Wait for the document to announce itself rather than guessing at a delay — a reused
+        // panel reloads asynchronously, and anything sent before the listener exists is lost.
+        this.panel.webview.onDidReceiveMessage((msg: { type?: string }) => {
+            if (msg?.type !== 'ready') { return; }
             try {
                 const buffer = fs.readFileSync(storyPath);
                 this.panel.webview.postMessage({
@@ -86,7 +114,7 @@ export class GamePanel {
             } catch (e) {
                 this.panel.webview.postMessage({ type: 'error', msg: String(e) });
             }
-        }, 500);
+        }, null, this.disposables);
     }
 
     private buildHtml(context: vscode.ExtensionContext, isZMachine: boolean): string {
@@ -109,6 +137,9 @@ export class GamePanel {
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<!-- Unique per load. Setting webview.html to an IDENTICAL string is a no-op in VS Code, so a
+     reused panel would keep its old document — and Quixe refuses to initialise twice in one page. -->
+<meta name="bgl-run" content="${Date.now()}-${Math.random().toString(36).slice(2)}">
 <meta name="viewport" content="width=device-width, user-scalable=no">
 <meta http-equiv="Content-Security-Policy"
   content="default-src 'none';
@@ -205,6 +236,7 @@ ${isZMachine ? `<script src="${zvmJs}"></script>` : ''}
 (function () {
     var vscode = acquireVsCodeApi();
 
+    vscode.postMessage({ type: 'ready' });
     window.addEventListener('message', function (event) {
         var msg = event.data;
 
@@ -246,6 +278,14 @@ ${isZMachine ? `<script src="${zvmJs}"></script>` : ''}
 </script>
 </body>
 </html>`;
+    }
+
+    /** Tear this instance down but leave the panel open, for the next Play to adopt. */
+    private release(): vscode.WebviewPanel {
+        if (GamePanel.current === this) { GamePanel.current = undefined; }
+        this.disposables.forEach(d => d.dispose());
+        this.disposables = [];
+        return this.panel;
     }
 
     dispose(): void {

@@ -3,7 +3,7 @@ import * as path from 'path';
 import * as cp from 'child_process';
 import * as fs from 'fs';
 import { LanguageClient, LanguageClientOptions, ServerOptions, State } from 'vscode-languageclient/node';
-import { BeguileDebugAdapterFactory, openI6SourceCommand, openBglSourceCommand, setBeguileOutputChannel, setActiveVarFilter } from './beguileDebugAdapter';
+import { BeguileDebugAdapterFactory, openI6SourceCommand, openBglSourceCommand, setBeguileOutputChannel, setActiveVarFilter, parkInterpreterPanel } from './beguileDebugAdapter';
 import { VariableFilterViewProvider } from './variableFilterView';
 import { setDebugPanelOutputChannel } from './debugPanel';
 import { BeguileSemanticTokensProvider, tokenLegend } from './semanticTokens';
@@ -15,6 +15,10 @@ let lspClient: LanguageClient | undefined;
 // LSP parses included files against so their #if gating/symbols resolve). undefined = none set;
 // callers then fall back to the active editor. Persisted in workspaceState under this key.
 let beguileEntryPoint: string | undefined;
+/** Last source actually compiled by Play/Debug — lets F5 work from the interpreter panel,
+ *  where there is no active text editor to fall back on. */
+let lastLaunchedBglPath: string | undefined;
+const LAST_LAUNCHED_STATE_KEY = 'beguile.lastLaunchedBglPath';
 const ENTRY_POINT_STATE_KEY = 'beguile.entryPoint';
 
 /** Push the current entry point to the language server (empty path clears it). No-op if the client isn't running. */
@@ -36,6 +40,25 @@ function sendConfigToLsp(): void {
 function resolveRunTarget(editor: vscode.TextEditor | undefined): string | undefined {
     if (beguileEntryPoint && fs.existsSync(beguileEntryPoint)) { return beguileEntryPoint; }
     return editor?.document.uri.fsPath;
+}
+
+/**
+ * The source Play/Debug should compile, in priority order: the designated entry point, the active
+ * .bgl/.inf editor, then the last source we launched. The third case is what makes F5 work from the
+ * interpreter panel — a focused webview means there is no active text editor at all.
+ * Reports the failure itself and returns undefined when nothing resolves.
+ */
+function resolveLaunchSource(verb: 'play' | 'debug'): string | undefined {
+    if (beguileEntryPoint && fs.existsSync(beguileEntryPoint)) { return beguileEntryPoint; }
+
+    const editor = vscode.window.activeTextEditor;
+    const langId = editor?.document.languageId;
+    if (editor && (langId === 'beguile' || langId === 'inform6')) { return editor.document.uri.fsPath; }
+
+    if (lastLaunchedBglPath && fs.existsSync(lastLaunchedBglPath)) { return lastLaunchedBglPath; }
+
+    vscode.window.showErrorMessage(`Set a Beguile entry point, or open a .bgl/.inf file to ${verb}.`);
+    return undefined;
 }
 
 /** Build the beguiler binary path and CLI args string from extension settings. */
@@ -224,17 +247,10 @@ export function activate(context: vscode.ExtensionContext) {
 
     // ── Beguile: Play ─────────────────────────────────────────────────────────
     const playCommand = vscode.commands.registerCommand('beguile.play', async () => {
-        const editor = vscode.window.activeTextEditor;
-        // Prefer the designated entry point; fall back to the active .bgl/.inf when none is set.
-        let bglPath = (beguileEntryPoint && fs.existsSync(beguileEntryPoint)) ? beguileEntryPoint : undefined;
-        if (!bglPath) {
-            const langId = editor?.document.languageId;
-            if (!editor || (langId !== 'beguile' && langId !== 'inform6')) {
-                vscode.window.showErrorMessage('Set a Beguile entry point, or open a .bgl/.inf file to play.');
-                return;
-            }
-            bglPath = editor.document.uri.fsPath;
-        }
+        const bglPath = resolveLaunchSource('play');
+        if (!bglPath) { return; }
+        lastLaunchedBglPath = bglPath;
+        context.workspaceState.update(LAST_LAUNCHED_STATE_KEY, bglPath);
         const { bin, args } = beguilerCommand();
 
         // Compile the file with beguiler (no --debug for plain play).
@@ -294,17 +310,10 @@ export function activate(context: vscode.ExtensionContext) {
 
     // ── Beguile: Debug ────────────────────────────────────────────────────────
     const debugCommand = vscode.commands.registerCommand('beguile.debug', async () => {
-        const editor = vscode.window.activeTextEditor;
-        // Prefer the designated entry point; fall back to the active .bgl/.inf when none is set.
-        let bglPath = (beguileEntryPoint && fs.existsSync(beguileEntryPoint)) ? beguileEntryPoint : undefined;
-        if (!bglPath) {
-            const langId = editor?.document.languageId;
-            if (!editor || (langId !== 'beguile' && langId !== 'inform6')) {
-                vscode.window.showErrorMessage('Set a Beguile entry point, or open a .bgl/.inf file to debug.');
-                return;
-            }
-            bglPath = editor.document.uri.fsPath;
-        }
+        const bglPath = resolveLaunchSource('debug');
+        if (!bglPath) { return; }
+        lastLaunchedBglPath = bglPath;
+        context.workspaceState.update(LAST_LAUNCHED_STATE_KEY, bglPath);
         const { bin, args } = beguilerCommand(true);
 
         // Compile with --debug. Same spawn-based streaming as the play path so output
@@ -384,6 +393,9 @@ export function activate(context: vscode.ExtensionContext) {
         // Tear down any Beguile debug session already running so a fresh Run
         // replaces it instead of stacking a second interpreter/session on top.
         if (activeBeguileSessions.size > 0) {
+            // Hand the live interpreter panel to the session about to start, so the re-run
+            // reuses it where it sits instead of closing it and reopening somewhere else.
+            parkInterpreterPanel(context);
             const stopping = [...activeBeguileSessions];
             await Promise.all(stopping.map((s) => vscode.debug.stopDebugging(s)));
             // Wait (briefly) for termination events to drain the set so the new
@@ -396,7 +408,7 @@ export function activate(context: vscode.ExtensionContext) {
 
         const ext = path.extname(storyPath).toLowerCase();
         const isZMachine = ['.z3', '.z5', '.z6', '.z8', '.zblorb'].includes(ext);
-        await vscode.debug.startDebugging(
+        const started = await vscode.debug.startDebugging(
             vscode.workspace.workspaceFolders?.[0],
             {
                 type: 'beguile',
@@ -409,6 +421,13 @@ export function activate(context: vscode.ExtensionContext) {
                 isZMachine,
             }
         );
+
+        // The compile log has served its purpose once the session is live; hide it so the
+        // panel area is free for the Debug Console. Any failure path above returns early,
+        // so the log stays up whenever there is something to read in it.
+        if (started && vscode.workspace.getConfiguration('Beguilex').get<boolean>('closeOutputOnDebugLaunch')) {
+            outputChannel.hide();
+        }
     });
 
     context.subscriptions.push(debugCommand);
@@ -536,6 +555,8 @@ export function activate(context: vscode.ExtensionContext) {
     // per-workspace. A status-bar item shows the current entry point and opens the picker.
     beguileEntryPoint = context.workspaceState.get<string>(ENTRY_POINT_STATE_KEY) || undefined;
     if (beguileEntryPoint && !fs.existsSync(beguileEntryPoint)) { beguileEntryPoint = undefined; }
+    lastLaunchedBglPath = context.workspaceState.get<string>(LAST_LAUNCHED_STATE_KEY) || undefined;
+    if (lastLaunchedBglPath && !fs.existsSync(lastLaunchedBglPath)) { lastLaunchedBglPath = undefined; }
 
     const entryStatusItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
     // Case-insensitive path equality — used to decide whether the ACTIVE editor is the entry point

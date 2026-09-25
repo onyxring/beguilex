@@ -100,6 +100,11 @@
             "default": false,
             "description": "Mirror game text output to the Debug Console in real-time during debugging."
           },
+          "Beguilex.closeOutputOnDebugLaunch": {
+            "type": "boolean",
+            "default": true,
+            "markdownDescription": "Close the Beguile compiler output view once a successful debug build has launched the debug session. The view stays open when the compile fails."
+          },
           "Beguilex.interpreterTheme": {
             "type": "string",
             "enum": [
@@ -262,14 +267,29 @@
         ]
       }
     ],
+    "keybindings": [
+      {
+        "command": "beguile.debug",
+        "key": "f5",
+        "when": "(activeWebviewPanelId == 'beguile.debugPanel' || activeWebviewPanelId == 'beguile.gamePanel') && debugState != 'stopped'"
+      },
+      {
+        "command": "beguile.play",
+        "key": "ctrl+f5",
+        "mac": "cmd+f5",
+        "when": "activeWebviewPanelId == 'beguile.debugPanel' || activeWebviewPanelId == 'beguile.gamePanel'"
+      }
+    ],
     "commands": [
       {
         "command": "beguile.play",
-        "title": "Beguile: Play"
+        "title": "Beguile: Rebuild and Play",
+        "icon": "$(debug-rerun)"
       },
       {
         "command": "beguile.debug",
-        "title": "Beguile: Debug"
+        "title": "Beguile: Rebuild and Debug",
+        "icon": "$(debug-restart)"
       },
       {
         "command": "beguile.openI6Source",
@@ -307,6 +327,16 @@
     ],
     "menus": {
       "editor/title": [
+        {
+          "command": "beguile.debug",
+          "when": "activeWebviewPanelId == 'beguile.debugPanel' || activeWebviewPanelId == 'beguile.gamePanel'",
+          "group": "navigation@1"
+        },
+        {
+          "command": "beguile.play",
+          "when": "activeWebviewPanelId == 'beguile.gamePanel'",
+          "group": "navigation@2"
+        },
         {
           "command": "beguile.openI6Source",
           "when": "beguile.showOpenI6Button && resourceExtname == .bgl",

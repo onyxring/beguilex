@@ -20,7 +20,10 @@
  * Value+type variable inspection is type-only here; runtime *values* need the
  * interpreter and are deferred with the interpreter swap.
  *
- * Fixtures are regenerated with tools/gen-debug-fixtures.sh.
+ * Fixtures are regenerated with tools/gen-debug-fixtures.sh. This harness compiles
+ * nothing - it reads those committed bytes - so a fixture that has fallen behind the
+ * compiler still passes here. `npm run test:fixtures` (--check) is what catches that,
+ * and it runs ahead of this harness via the test:debug script.
  *
  * Run:  npm run test:debug
  */

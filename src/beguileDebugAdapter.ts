@@ -47,6 +47,46 @@ export function setActiveVarFilter(filter: string): void {
     _activeAdapter?.setVarFilter(filter);
 }
 
+/**
+ * The interpreter panel handed over between debug sessions.
+ *
+ * A re-run stops the old session before starting the new one, which would close the
+ * panel and reopen it from a remembered ViewColumn — losing any placement a column
+ * cannot express, above all a detached window. Parking the live panel instead lets the
+ * next launch adopt it exactly where it sits.
+ */
+let _parkedPanel: vscode.WebviewPanel | undefined;
+let _parkedWatchers: vscode.Disposable[] = [];
+
+function clearParkedPanel(): void {
+    _parkedWatchers.forEach(d => d.dispose());
+    _parkedWatchers = [];
+    _parkedPanel = undefined;
+}
+
+/** Detach the running session's panel so the next launch can reuse it. */
+export function parkInterpreterPanel(context: vscode.ExtensionContext): void {
+    clearParkedPanel();
+    const panel = _activeAdapter?.releasePanel();
+    if (!panel) { return; }
+    _parkedPanel = panel;
+    _parkedWatchers = [
+        // The user may close or move it during the handover window.
+        panel.onDidDispose(() => clearParkedPanel()),
+        panel.onDidChangeViewState(e => {
+            if (e.webviewPanel.viewColumn !== undefined) {
+                context.globalState.update('debugPanelColumn', e.webviewPanel.viewColumn);
+            }
+        }),
+    ];
+}
+
+function takeParkedPanel(): vscode.WebviewPanel | undefined {
+    const panel = _parkedPanel;
+    clearParkedPanel();
+    return panel;
+}
+
 // ─── Factory ─────────────────────────────────────────────────────────────────
 
 export class BeguileDebugAdapterFactory implements vscode.DebugAdapterDescriptorFactory {
@@ -160,7 +200,8 @@ export class BeguileDebugAdapter implements vscode.DebugAdapter {
                     savedColumn,
                     (addr: number, vmState: VmState) => this.onVmBreak(addr, false, vmState),
                     (addr: number, vmState: VmState) => this.onVmBreak(addr, true, vmState),
-                    (col) => this.onPanelClosed(col)
+                    (col) => this.onPanelClosed(col),
+                    takeParkedPanel()
                 );
                 // A step ran into an input request (glk_select) or quit — the VM yielded without a
                 // step boundary. Regain control so the debugger doesn't hang: surface it as stopped
@@ -904,6 +945,13 @@ export class BeguileDebugAdapter implements vscode.DebugAdapter {
             threadId: 1,
             allThreadsStopped: true,
         });
+    }
+
+    /** Give up the interpreter panel without closing it (see parkInterpreterPanel). */
+    releasePanel(): vscode.WebviewPanel | undefined {
+        const panel = this.panel?.release();
+        this.panel = null;
+        return panel;
     }
 
     private onPanelClosed(column: vscode.ViewColumn | undefined): void {
