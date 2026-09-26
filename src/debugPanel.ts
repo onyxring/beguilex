@@ -125,6 +125,7 @@ export class DebugPanel {
         // Record the column as it moves, not only on close, so the next run lands where
         // the panel was last seen even if this session ends without a close event.
         this.panel.onDidChangeViewState(e => {
+            if (e.webviewPanel.active) { this.panel.webview.postMessage({ type: 'focusInput' }); }
             if (e.webviewPanel.viewColumn !== undefined) {
                 this.lastColumn = e.webviewPanel.viewColumn;
                 this.context.globalState.update('debugPanelColumn', this.lastColumn);
@@ -228,6 +229,7 @@ export class DebugPanel {
                 globalAddresses,
                 initialBreakpoints: [...this.mergedAddrs()],
             });
+            this.panel.reveal(undefined, false);   // launching leaves the keyboard in the game
         } catch (e) {
             this.panel.webview.postMessage({ type: 'error', msg: String(e) });
         }
@@ -382,6 +384,16 @@ ${isZMachine ? `<script src="${zvmJs}"></script><script src="${zvmDbgJs}"></scri
     };
 
     // Messages from extension host
+    // GlkOte creates its input element only when the story first asks for input, so focus waits for it.
+    function focusGameInput(waitMs) {
+        var deadline = Date.now() + waitMs;
+        (function attempt() {
+            var el = document.querySelector('#windowport input');
+            if (el) { el.focus(); return; }
+            if (Date.now() < deadline) { setTimeout(attempt, 100); }
+        })();
+    }
+
     vscode.postMessage({ type: 'ready' });
     window.addEventListener('message', function (event) {
         var msg = event.data;
@@ -410,6 +422,8 @@ ${isZMachine ? `<script src="${zvmJs}"></script><script src="${zvmDbgJs}"></scri
             var glkOpt = _bglIsZMachine ? { Glk: window.Glk } : {};
 
             GiLoad.load_run(Object.assign({ vm: vm, use_query_story: false }, glkOpt), storyArray, 'array');
+            window.focus();
+            focusGameInput(10000);
             /* Prevent GlkOte arrange/timer events from re-entering execute_loop while
              * the debugger is paused. Opening source files in VS Code can resize the
              * webview, firing an arrange event that calls Quixe.resume() and runs the game. */
@@ -450,7 +464,8 @@ ${isZMachine ? `<script src="${zvmJs}"></script><script src="${zvmDbgJs}"></scri
                     };
                 }
             }
-
+        } else if (msg.type === 'focusInput') {
+            focusGameInput(2000);
         } else if (msg.type === 'setTheme') {
             var r = document.documentElement.style;
             r.setProperty('--bgl-bg',     msg.bg);

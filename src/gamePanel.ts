@@ -102,6 +102,11 @@ export class GamePanel {
 
         // Wait for the document to announce itself rather than guessing at a delay — a reused
         // panel reloads asynchronously, and anything sent before the listener exists is lost.
+        // Returning to the panel puts the keyboard back in the game's input.
+        this.panel.onDidChangeViewState(e => {
+            if (e.webviewPanel.active) { this.panel.webview.postMessage({ type: 'focusInput' }); }
+        }, null, this.disposables);
+
         this.panel.webview.onDidReceiveMessage((msg: { type?: string }) => {
             if (msg?.type !== 'ready') { return; }
             try {
@@ -111,6 +116,8 @@ export class GamePanel {
                     storyBase64: buffer.toString('base64'),
                     isZMachine
                 });
+                // Launching should leave the keyboard in the game, even if the output view took focus meanwhile.
+                this.panel.reveal(undefined, false);
             } catch (e) {
                 this.panel.webview.postMessage({ type: 'error', msg: String(e) });
             }
@@ -236,6 +243,16 @@ ${isZMachine ? `<script src="${zvmJs}"></script>` : ''}
 (function () {
     var vscode = acquireVsCodeApi();
 
+    // GlkOte creates its input element only when the story first asks for input, so focus waits for it.
+    function focusGameInput(waitMs) {
+        var deadline = Date.now() + waitMs;
+        (function attempt() {
+            var el = document.querySelector('#windowport input');
+            if (el) { el.focus(); return; }
+            if (Date.now() < deadline) { setTimeout(attempt, 100); }
+        })();
+    }
+
     vscode.postMessage({ type: 'ready' });
     window.addEventListener('message', function (event) {
         var msg = event.data;
@@ -259,7 +276,10 @@ ${isZMachine ? `<script src="${zvmJs}"></script>` : ''}
             var glkOpt = msg.isZMachine ? { Glk: window.Glk } : {};
 
             GiLoad.load_run(Object.assign({ vm: vm, use_query_story: false }, glkOpt), storyArray, 'array');
-
+            window.focus();
+            focusGameInput(10000);
+        } else if (msg.type === 'focusInput') {
+            focusGameInput(2000);
         } else if (msg.type === 'setTheme') {
             var r = document.documentElement.style;
             r.setProperty('--bgl-bg',     msg.bg);
