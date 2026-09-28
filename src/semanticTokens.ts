@@ -57,7 +57,7 @@ const BEGUILE_KEYWORDS = new Set([
     'class', 'object', 'enum', 'bnum', 'verb', 'grammar', 'attribute', 'property',
     'patternElement', 'grammarRule', 'grammarRuleList',
     // declaration modifiers
-    'extern', 'extend', 'emitter', 'replace', 'const', 'alias', 'byVal', 'ref', 'readonly', 'static', 'explicit', 'default', 'superposed', 'additive', 'inline',
+    'extern', 'extend', 'emitter', 'replace', 'const', 'alias', 'primitive', 'ref', 'readonly', 'static', 'explicit', 'default', 'superposed', 'additive', 'inline',
     // contextual verb-extend member keywords (colored by the TextMate verb-extend-members
     // rule as storage.type); listed here so a same-named real member can't make the
     // semantic-token layer repaint `synonyms`/`priority` as a property in `synonyms = {…}`

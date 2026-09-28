@@ -709,6 +709,13 @@ ${isZMachine ? `<script src="${zvmJs}"></script><script src="${zvmDbgJs}"></scri
         this.pendingDictWords.clear();
     }
 
+    /** Bring the panel forward and put the keyboard in the game's input. */
+    focus(): void {
+        if (this._disposed) { return; }
+        this.panel.reveal(undefined, false);
+        this.panel.webview.postMessage({ type: 'focusInput' });
+    }
+
     /**
      * Tear this instance down but leave the webview panel open, and hand it back so the
      * next debug session can take it over in place. Detaching the listeners first means

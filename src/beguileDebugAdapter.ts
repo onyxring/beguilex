@@ -81,6 +81,11 @@ export function parkInterpreterPanel(context: vscode.ExtensionContext): void {
     ];
 }
 
+/** Give the running session's interpreter the keyboard (see the end of the debug launch). */
+export function focusInterpreterPanel(): void {
+    _activeAdapter?.focusPanel();
+}
+
 function takeParkedPanel(): vscode.WebviewPanel | undefined {
     const panel = _parkedPanel;
     clearParkedPanel();
@@ -946,6 +951,8 @@ export class BeguileDebugAdapter implements vscode.DebugAdapter {
             allThreadsStopped: true,
         });
     }
+
+    focusPanel(): void { this.panel?.focus(); }
 
     /** Give up the interpreter panel without closing it (see parkInterpreterPanel). */
     releasePanel(): vscode.WebviewPanel | undefined {

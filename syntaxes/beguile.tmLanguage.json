@@ -99,15 +99,21 @@
 
     "emitter-body-single": {
       "comment": "Single-line emitter body: emitter TYPE NAME(params) { i6expr }. Must match before multi-line rule. Case-insensitive.",
-      "match": "(?i)\\bemitter\\b([^{\\n]*)\\{([^\\n}]*)\\}",
+      "match": "(?i)\\b(emitter)\\b([^{\\n]*)\\{([^\\n}]*)\\}",
       "captures": {
         "1": {
           "patterns": [
+            { "include": "#keywords-declaration" }
+          ]
+        },
+        "2": {
+          "patterns": [
+            { "include": "#keywords-declaration" },
             { "include": "#keywords-type-primitive" },
             { "include": "#function-definition" }
           ]
         },
-        "2": {
+        "3": {
           "patterns": [
             { "include": "#emitter-vars" },
             { "include": "source.inform6" }
@@ -358,7 +364,7 @@
     "keywords-declaration": {
       "comment": "Case-insensitive.",
       "name": "storage.modifier.beguile",
-      "match": "(?i)\\b(asI6|asBgl|byVal|extern|extend|emitter|replace|const|alias|ref|static|explicit|default|superposed|additive|inline|hide|synonyms|typeSealed)\\b"
+      "match": "(?i)\\b(asI6|asBgl|primitive|value(?=\\s+class\\b)|extern|extend|emitter|replace|const|alias|ref|static|explicit|default|superposed|additive|inline|hide|synonyms|typeSealed)\\b"
     },
 
     "keywords-type-declaration": {

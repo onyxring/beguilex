@@ -3,7 +3,7 @@ import * as path from 'path';
 import * as cp from 'child_process';
 import * as fs from 'fs';
 import { LanguageClient, LanguageClientOptions, ServerOptions, State } from 'vscode-languageclient/node';
-import { BeguileDebugAdapterFactory, openI6SourceCommand, openBglSourceCommand, setBeguileOutputChannel, setActiveVarFilter, parkInterpreterPanel } from './beguileDebugAdapter';
+import { BeguileDebugAdapterFactory, openI6SourceCommand, openBglSourceCommand, setBeguileOutputChannel, setActiveVarFilter, parkInterpreterPanel, focusInterpreterPanel } from './beguileDebugAdapter';
 import { VariableFilterViewProvider } from './variableFilterView';
 import { setDebugPanelOutputChannel } from './debugPanel';
 import { BeguileSemanticTokensProvider, tokenLegend } from './semanticTokens';
@@ -427,6 +427,13 @@ export function activate(context: vscode.ExtensionContext) {
         // so the log stays up whenever there is something to read in it.
         if (started && vscode.workspace.getConfiguration('Beguilex').get<boolean>('closeOutputOnDebugLaunch')) {
             outputChannel.hide();
+        }
+        // Last word on focus. Everything above runs in THIS window — hiding the output, and VS Code
+        // opening the Debug Console as the session starts — so an interpreter in another window loses
+        // the keyboard to it. Refocus once the launch has settled, and again after the console opens.
+        if (started) {
+            focusInterpreterPanel();
+            setTimeout(() => focusInterpreterPanel(), 300);
         }
     });
 
