@@ -192,8 +192,24 @@
             "default": "",
             "markdownDescription": "Additional search paths for #include directives, used by both Beguile and Inform 6. *(Multiple paths may be comma-separated. Usually set in source.)*"
           },
-          "beguiler.extraArgs": {
+          "beguiler.verbSplitWarnings": {
             "order": 7,
+            "type": "string",
+            "enum": [
+              "",
+              "hide",
+              "show"
+            ],
+            "enumDescriptions": [
+              "Use the source file's filterVerbSplitWarnings setting (hidden by default)",
+              "Hide them",
+              "Show them"
+            ],
+            "default": "",
+            "markdownDescription": "Inform 6's *Verb declaration no longer has any verbs associated* warnings, raised when Beguile gives a library word its own grammar and leaves that word's library verb empty. *(Usually left to the source.)*"
+          },
+          "beguiler.extraArgs": {
+            "order": 8,
             "type": "string",
             "default": "",
             "description": "Extra command-line arguments appended to every beguiler invocation."

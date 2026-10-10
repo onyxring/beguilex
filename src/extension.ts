@@ -98,6 +98,9 @@ function beguilerCommand(isDebug: boolean = false): { bin: string; args: string 
         parts.push(`-lib=${libraryPath}`);
     }
 
+    const verbSplitWarnings: string = bCfg.get('verbSplitWarnings') || '';
+    if (verbSplitWarnings) { parts.push(`-filterVerbSplitWarnings=${verbSplitWarnings === 'hide'}`); }
+
     const extraBeguiler: string = bCfg.get('extraArgs') || '';
     if (extraBeguiler) { parts.push(extraBeguiler); }
 
