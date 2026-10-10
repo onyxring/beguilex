@@ -460,11 +460,14 @@ export class DebugInfo {
      * so bare `object` instances still show their members in the Self scope.
      */
     objectTypeInfoFor(objName: string): BglTypeInfo | undefined {
-        const typeName = this.globalVarType(objName) ?? objName;
-        const typed = this.bglTypeMap.get(typeName);
+        // The .bgldbg names are lowercase (Beguile is case-insensitive); the I6 .dbg keeps the
+        // author's case, and that is the name callers pass.
+        const key = objName.toLowerCase();
+        const typeName = this.globalVarType(key) ?? key;
+        const typed = this.bglTypeMap.get(typeName) ?? this.bglTypeMap.get(typeName.toLowerCase());
         if (typed) { return typed; }
         // Fall back to sym-section properties for this specific object
-        const symProps = this.objSymProps.get(objName);
+        const symProps = this.objSymProps.get(key);
         if (symProps && symProps.length > 0) {
             return { name: objName, props: symProps };
         }
@@ -497,7 +500,7 @@ export class DebugInfo {
 
     /** Beguile type for a global variable, or undefined if not in .types. */
     globalVarType(varName: string): BglType | undefined {
-        return this.globalTyped.get(varName);
+        return this.globalTyped.get(varName) ?? this.globalTyped.get(varName.toLowerCase());
     }
 
     /** Storage location of a local (from .types): `slot` (frame-resident) or `_bglFrm-->N` (spilled). */

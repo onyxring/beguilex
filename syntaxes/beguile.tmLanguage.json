@@ -251,7 +251,7 @@
         {
           "comment": "#define NAME — value portion is left unscoped so the main grammar colors numbers/strings/identifiers naturally (matches C/C++/C# behavior). Case-insensitive.",
           "name": "meta.preprocessor.define.beguile",
-          "match": "(?i)(#define)\\s+([a-zA-Z_][a-zA-Z0-9_]*)",
+          "match": "(?i)(#define(?:i6)?)\\s+([a-zA-Z_][a-zA-Z0-9_]*)",
           "captures": {
             "1": { "name": "keyword.control.directive.define.beguile" },
             "2": { "name": "entity.name.constant.beguile" }
@@ -364,7 +364,7 @@
     "keywords-declaration": {
       "comment": "Case-insensitive.",
       "name": "storage.modifier.beguile",
-      "match": "(?i)\\b(asI6|asBgl|primitive|value(?=\\s+class\\b)|extern|extend|emitter|replace|const|alias|ref|static|explicit|default|superposed|additive|inline|hide|synonyms|typeSealed|literal(?=\\s+[A-Za-z_]))\\b"
+      "match": "(?i)\\b(asI6|asBgl|primitive|value(?=\\s+class\\b)|extern|extend|emitter|replace|const|alias|ref|static|explicit|default|superposed|additive|inline|hide|synonyms|typeSealed|required(?=\\s+[A-Za-z_])|literal(?=\\s+[A-Za-z_]))\\b"
     },
 
     "keywords-type-declaration": {
