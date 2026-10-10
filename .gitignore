@@ -12,3 +12,9 @@ out/
 
 # scratch dir for tools/gen-debug-fixtures.sh (path is embedded in the fixtures)
 .fixture-build/
+
+# AI assistant files live in the private IF-Projects repo, not in this public one
+CLAUDE.md
+claude.md
+CLAUDE.local.md
+.claude/
