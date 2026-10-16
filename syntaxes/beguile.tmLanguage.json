@@ -364,13 +364,13 @@
     "keywords-declaration": {
       "comment": "Case-insensitive.",
       "name": "storage.modifier.beguile",
-      "match": "(?i)\\b(asI6|asBgl|primitive|value(?=\\s+class\\b)|extern|extend|emitter|replace|const|alias|ref|static|explicit|default|superposed|additive|inline|hide|synonyms|typeSealed|required(?=\\s+[A-Za-z_])|literal(?=\\s+[A-Za-z_]))\\b"
+      "match": "(?i)\\b(asI6|asBgl|primitive|extern|extend|emitter|replace|const|alias|ref|static|explicit|default|superposed|additive|inline|hide|synonyms|typeSealed|required(?=\\s+[A-Za-z_])|literal(?=\\s+[A-Za-z_]))\\b"
     },
 
     "keywords-type-declaration": {
       "comment": "Case-insensitive — `class` / `Class` / `CLASS` all match.",
       "name": "storage.type.beguile",
-      "match": "(?i)\\b(class|object|enum|bnum|verb|grammar|attribute|property|patternElement|grammarRule|grammarRuleList)\\b"
+      "match": "(?i)\\b(class|struct(?=\\s+[A-Za-z_])|object|enum|bnum|verb|grammar|attribute|property|patternElement|grammarRule|grammarRuleList)\\b"
     },
 
     "keywords-type-primitive": {
