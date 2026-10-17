@@ -229,8 +229,8 @@ function variablePresentation(): void {
             // readWord(mem[_bglFrm] + N*WORDSIZE). If the compiler ever changed the spill layout,
             // this trips before the adapter silently reads garbage.
             const inf = fs.readFileSync(path.join(FIXTURES, 'spillz.bgl.transpiled.inf'), 'utf8');
-            ok(/_bglFrm\s*=\s*_bglFrameAlloc\(/.test(inf),
-               'spillz: emitted I6 sets `_bglFrm = _bglFrameAlloc(…)` (pool base — what the adapter reads from)');
+            ok(/_bglFrm\s*=\s*_bglFrameAlloc\w*\(/.test(inf),
+               'spillz: emitted I6 sets `_bglFrm = _bglFrameAlloc…(…)` (pool base — what the adapter reads from)');
             for (let i = 0; i < sp.length; i++) {
                 ok(inf.includes(`_bglFrm-->${i}`),
                    `spillz: emitted I6 addresses spilled local via \`_bglFrm-->${i}\` (matches readWord offset ${i})`);

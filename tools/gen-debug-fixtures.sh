@@ -190,6 +190,29 @@ EOF
 rt_body Z8    > "$TMP/rt_calls_z.bgl"; gen rt_calls_z "$TMP/rt_calls_z.bgl"
 rt_body Glulx > "$TMP/rt_calls_g.bgl"; gen rt_calls_g "$TMP/rt_calls_g.bgl"
 
+# rt_arrays: a global array and a local (heap) array, for the array layout the Variables pane reads.
+# Built to BOTH targets (rt_arrays_z = Z8, rt_arrays_g = Glulx).
+arr_body() {  # $1 = target
+cat <<EOF
+#beguilerSettings { target=$1; title="RtArrays"; includePaths ="$LIB_I6"; }
+#i6 { Serial "$SERIAL_PIN"; }
+#includeI6 "parser"
+#includeI6 "verblib"
+#include <array>
+array<int> nums = {4, -5, 6};
+int fill(int a, int b){
+    array<int> loc[4];
+    loc += a;
+    loc += b;
+    return loc.length;
+}
+void initialise(){ print(fill(7, -9)); print(nums.length); }
+#includeI6 "grammar"
+EOF
+}
+arr_body Z8    > "$TMP/rt_arrays_z.bgl"; gen rt_arrays_z "$TMP/rt_arrays_z.bgl"
+arr_body Glulx > "$TMP/rt_arrays_g.bgl"; gen rt_arrays_g "$TMP/rt_arrays_g.bgl"
+
 if [ "$MODE" = check ]; then
   if [ "$DRIFT" -ne 0 ]; then
     echo ""

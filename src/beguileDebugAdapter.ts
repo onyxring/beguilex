@@ -16,6 +16,7 @@ import { computeStep, routeBreak } from './debugStepLogic';
 
 interface VmFrame  { funcAddr: number; returnPC: number; locals: { [frameOffset: number]: number } }
 interface VmState  { frames: VmFrame[]; globals: { [address: number]: number } }
+interface BreakpointSpec { condition?: string; hitCondition?: string; logMessage?: string; hits: number }
 
 // ─── Module-level singletons ──────────────────────────────────────────────────
 
@@ -127,6 +128,10 @@ export class BeguileDebugAdapter implements vscode.DebugAdapter {
     private varRefMap  = new Map<number, { objAddr: number; typeName: string }>();
     /** Expandable array rows: variablesReference → the array's base pointer, element type, capacity. */
     private arrayRefMap = new Map<number, { base: number; elemType: string; capacity: number; dataOffset: number }>();
+    /** Expandable member arrays held in their property's data: variablesReference → the elements read. */
+    private inlineArrayMap = new Map<number, { values: number[]; elemType: string }>();
+    /** The expression each expandable row stands for, so its children get an `evaluateName`. */
+    private refPath = new Map<number, string>();
     private nextVarRef = 3000;
 
     /** Fixed variablesReference for the "Self" scope. */
@@ -148,6 +153,8 @@ export class BeguileDebugAdapter implements vscode.DebugAdapter {
      * .bgl (map source) or a pure-I6 file. Rebuilt per source on every setBreakpoints.
      */
     private breakpointsBySource = new Map<string, { isBgl: boolean; addrToLine: Map<number, number> }>();
+    /** A breakpoint's condition, hit count and log message, by source then line. */
+    private breakpointSpecs = new Map<string, Map<number, BreakpointSpec>>();
     /** The breakpoint that produced the current stop (undefined for step stops / no match). */
     private breakpointHitSource: { file: string; line: number; isBgl: boolean } | undefined;
 
@@ -187,6 +194,10 @@ export class BeguileDebugAdapter implements vscode.DebugAdapter {
                     supportsSetVariable: true,
                     supportsInvalidatedEvent: true,
                     supportsLoadedSourcesRequest: true,
+                    supportsEvaluateForHovers: true,
+                    supportsConditionalBreakpoints: true,
+                    supportsHitConditionalBreakpoints: true,
+                    supportsLogPoints: true,
                 });
                 // Do NOT send 'initialized' yet — wait until launch creates the panel,
                 // so that VS Code sends setBreakpoints only after the panel exists.
@@ -249,7 +260,15 @@ export class BeguileDebugAdapter implements vscode.DebugAdapter {
 
             case 'setBreakpoints': {
                 const src = message.arguments?.source?.path ?? '';
-                const bps = (message.arguments?.breakpoints ?? []) as Array<{ line: number }>;
+                const bps = (message.arguments?.breakpoints ?? []) as Array<{ line: number; condition?: string; hitCondition?: string; logMessage?: string }>;
+                const specs = new Map<number, BreakpointSpec>();
+                for (const bp of bps) {
+                    if (bp.condition || bp.hitCondition || bp.logMessage) {
+                        specs.set(bp.line, { condition: bp.condition?.trim() || undefined, hitCondition: bp.hitCondition?.trim() || undefined,
+                                             logMessage: bp.logMessage, hits: 0 });
+                    }
+                }
+                if (specs.size > 0) { this.breakpointSpecs.set(src, specs); } else { this.breakpointSpecs.delete(src); }
 
                 dbgLog(`setBreakpoints: src=${src} bps=${JSON.stringify(bps.map(b=>b.line))} hasDebugInfo=${!!this.debugInfo}`);
                 // Route by .bgldbg map membership rather than file extension. A .inf
@@ -520,6 +539,10 @@ export class BeguileDebugAdapter implements vscode.DebugAdapter {
                         })
                     );
                     vars.push(...scalarVarsF.filter(v => !f || v.name.toLowerCase().includes(f)));
+                    for (const g of (this.debugInfo?.userGlobalArrays() ?? [])) {
+                        if (f && !g.name.toLowerCase().includes(f)) { continue; }
+                        vars.push(await this.makeVarAsync(g.name, g.address, this.debugInfo?.globalVarType(g.name)));
+                    }
                     for (const g of (this.debugInfo?.userGlobalObjects() ?? [])) {
                         if (f && !g.name.toLowerCase().includes(f)) { continue; }
                         vars.push(this.makeVar(g.name, g.address, this.debugInfo?.globalVarType(g.name)));
@@ -552,6 +575,11 @@ export class BeguileDebugAdapter implements vscode.DebugAdapter {
                         })
                     );
                     vars.push(...scalarVars.filter(v => !f || v.name.toLowerCase().includes(f)));
+                    // File-scope arrays: the address is the array itself.
+                    for (const g of (this.debugInfo?.userGlobalArrays() ?? [])) {
+                        if (f && !g.name.toLowerCase().includes(f)) { continue; }
+                        vars.push(await this.makeVarAsync(g.name, g.address, this.debugInfo?.globalVarType(g.name)));
+                    }
                     // Object globals: address is the fixed Glulx object address; value IS the address
                     for (const g of (this.debugInfo?.userGlobalObjects() ?? [])) {
                         if (f && !g.name.toLowerCase().includes(f)) { continue; }
@@ -564,6 +592,13 @@ export class BeguileDebugAdapter implements vscode.DebugAdapter {
                             // No expandable properties — show object name, not raw address
                             vars.push({ name: g.name, value: g.name, type: 'object', variablesReference: 0 });
                         }
+                    }
+
+                } else if (this.inlineArrayMap.has(ref)) {
+                    // ── Member array held in its property's data ─────────────
+                    const info = this.inlineArrayMap.get(ref)!;
+                    for (let i = 0; i < info.values.length; i++) {
+                        vars.push(await this.makeVarAsync(`[${i}]`, info.values[i], info.elemType));
                     }
 
                 } else if (this.arrayRefMap.has(ref)) {
@@ -601,7 +636,9 @@ export class BeguileDebugAdapter implements vscode.DebugAdapter {
                     const vmFrame    = frameIdx >= 0 ? vmFrames[frameIdx] : undefined;
 
                     if (vmFrame && this.debugInfo) {
+                        // ZVM reports a frame's current pc rather than its routine's start.
                         const routine = this.debugInfo.routineByAddr(vmFrame.funcAddr)
+                                     ?? this.debugInfo.routineContaining(vmFrame.funcAddr)
                                      ?? (frameDepth === 0 && this.currentVmAddr !== undefined
                                          ? this.debugInfo.routineContaining(this.currentVmAddr)
                                          : undefined);
@@ -626,59 +663,34 @@ export class BeguileDebugAdapter implements vscode.DebugAdapter {
 
                 if (vars.length === 0 && ref === BeguileDebugAdapter.FILTER_SCOPE_REF) {
                     vars.push({ name: 'No matches.', value: '', variablesReference: 0 });
-                } else if (!this.arrayRefMap.has(ref)) {
+                } else if (!this.arrayRefMap.has(ref) && !this.inlineArrayMap.has(ref)) {
                     // Keep array elements in index order ([0],[1],…,[10]); only sort named scopes.
                     vars.sort((a, b) => a.name.localeCompare(b.name));
+                }
+                // An `evaluateName` lets "Add to Watch" and "Copy as Expression" work on any row.
+                const parent = this.refPath.get(ref) ?? '';
+                for (const v of vars) {
+                    if (!v.name || v.name === 'No matches.') { continue; }
+                    v.evaluateName = !parent ? v.name : v.name.startsWith('[') ? parent + v.name : `${parent}.${v.name}`;
+                    if (v.variablesReference) { this.refPath.set(v.variablesReference, v.evaluateName); }
                 }
                 this.respond(message, { variables: vars });
                 break;
             }
 
             case 'evaluate': {
-                const expr      = (message.arguments?.expression ?? '').trim();
-                const frameId2  = message.arguments?.frameId ?? 0;
-                // Resolve the expression to a raw value + its Beguile type, then render it the same
-                // way the Variables pane does (via makeVarAsync) so the Watch pane gets bool/enum/
-                // string formatting AND expandable arrays/objects — not just a bare number/address.
-                let resolved: { raw: number; type: string | undefined } | undefined;
-
-                if (this.debugInfo && this.currentVmState) {
-                    // Search current frame locals first
-                    const vmFrames = this.currentVmState.frames;
-                    const frameIdx = vmFrames.length - 1 - frameId2;
-                    const vmFrame  = frameIdx >= 0 ? vmFrames[frameIdx] : undefined;
-                    if (vmFrame) {
-                        const routine = this.debugInfo.routineByAddr(vmFrame.funcAddr)
-                                     ?? (frameId2 === 0 && this.currentVmAddr !== undefined
-                                         ? this.debugInfo.routineContaining(this.currentVmAddr)
-                                         : undefined);
-                        const local = routine?.locals.find(l => l.name === expr);
-                        if (local !== undefined) {
-                            const type = routine ? this.debugInfo.localVarType(routine.startAddr, expr) : undefined;
-                            resolved = { raw: (vmFrame.locals[local.frameOffset] ?? 0) as number, type };
-                        }
-                    }
-                    // Fall back to globals
-                    if (!resolved) {
-                        const g = this.debugInfo.globals().find(g => g.name === expr);
-                        if (g) {
-                            resolved = {
-                                raw: this.currentVmState.globals[g.address] ?? 0,
-                                type: this.debugInfo.globalVarType(expr),
-                            };
-                        }
-                    }
-                }
-
-                if (resolved) {
-                    const v = await this.makeVarAsync(expr, resolved.raw, resolved.type);
-                    this.respond(message, {
-                        result: v.value,
-                        type: v.type,
-                        variablesReference: v.variablesReference ?? 0,
-                    });
+                const expr     = (message.arguments?.expression ?? '').trim();
+                const frameId2 = message.arguments?.frameId ?? 0;
+                // Resolve the expression to a value + its Beguile type, then render it the same way the
+                // Variables pane does, so Watch and hover get the same formatting and expansion.
+                const r = await this.resolveExpression(expr, frameId2);
+                if (r === undefined) {
+                    this.respond(message, {}, `Can't evaluate: ${expr}`);
                 } else {
-                    this.respond(message, {}, `Unknown variable: ${expr}`);
+                    const v = r.words ? this.makeInlineArrayVar(expr, r.words, r.type ?? 'array<int>')
+                                      : await this.makeVarAsync(expr, r.raw, r.type);
+                    if (v.variablesReference) { this.refPath.set(v.variablesReference, expr); }
+                    this.respond(message, { result: v.value, type: v.type, variablesReference: v.variablesReference ?? 0 });
                 }
                 break;
             }
@@ -688,30 +700,33 @@ export class BeguileDebugAdapter implements vscode.DebugAdapter {
                 const name    = (message.arguments?.name ?? '') as string;
                 const strVal  = (message.arguments?.value ?? '') as string;
 
-                // Parse the incoming string value: bool keywords, hex, or decimal.
+                // Parse the incoming value: bool keywords, a char literal ('q'), hex, decimal, or the
+                // text the pane shows for it ("green (2)", "'q' (113)").
                 let numVal: number;
-                if      (strVal === 'true')  { numVal = 1; }
-                else if (strVal === 'false') { numVal = 0; }
-                else {
-                    numVal = /^0x/i.test(strVal) ? parseInt(strVal, 16) : parseInt(strVal, 10);
-                    if (isNaN(numVal)) { this.respond(message, {}, `Invalid value: ${strVal}`); break; }
-                }
+                const sv = strVal.trim();
+                const shownNumber = /\((-?\d+)\)\s*$/.exec(sv);
+                if      (sv === 'true')  { numVal = 1; }
+                else if (sv === 'false') { numVal = 0; }
+                else if (/^'.'$/.test(sv)) { numVal = sv.charCodeAt(1); }
+                else if (/^-?0x[0-9a-f]+$/i.test(sv)) { numVal = parseInt(sv, 16); }
+                else if (/^-?\d+$/.test(sv)) { numVal = parseInt(sv, 10); }
+                else if (shownNumber) { numVal = parseInt(shownNumber[1], 10); }
+                else { this.respond(message, {}, `Invalid value: ${strVal}`); break; }
 
                 if (ref === 2 && this.debugInfo && this.panel) {
                     // ── Global variable ───────────────────────────────────────
                     const g = this.debugInfo.globals().find(g => g.name === name);
                     if (!g) { this.respond(message, {}, `Unknown global: ${name}`); break; }
                     const type = this.debugInfo.globalVarType(name);
-                    if (type !== 'int' && type !== 'bool') {
-                        this.respond(message, {}, 'Only int and bool globals can be set');
+                    if (!this.isSettable(type)) {
+                        this.respond(message, {}, 'Only int, bool, char and enum globals can be set');
                         break;
                     }
                     const ok = await this.panel.setGlobal(g.address, numVal);
                     if (!ok) { this.respond(message, {}, 'Write failed'); break; }
                     // Keep the cached state in sync so the Variables pane reflects the change immediately.
                     if (this.currentVmState) { this.currentVmState.globals[g.address] = numVal; }
-                    const display = type === 'bool' ? (numVal ? 'true' : 'false') : String(numVal);
-                    this.respond(message, { value: display, type });
+                    this.respond(message, { value: this.makeVar(name, numVal, type).value, type });
 
                 } else if (ref === BeguileDebugAdapter.SELF_SCOPE_REF && this.debugInfo && this.panel && this.currentVmState) {
                     // ── Self property ─────────────────────────────────────────
@@ -722,13 +737,12 @@ export class BeguileDebugAdapter implements vscode.DebugAdapter {
                     const typeInfo    = typeName ? this.debugInfo.typeInfo(typeName) : undefined;
                     const prop        = typeInfo?.props.find(p => p.bglName === name);
                     if (!prop || !selfObjAddr) { this.respond(message, {}, 'Unknown property or no current object'); break; }
-                    if (prop.type !== 'int' && prop.type !== 'bool') { this.respond(message, {}, 'Only int and bool properties can be set'); break; }
+                    if (!this.isSettable(prop.type)) { this.respond(message, {}, 'Only int, bool, char and enum properties can be set'); break; }
                     const propId = this.debugInfo.propNumber(prop.i6Name);
                     if (propId === undefined) { this.respond(message, {}, `Property number unknown for: ${prop.i6Name}`); break; }
                     const ok = await this.panel.setProp(selfObjAddr, propId, numVal);
                     if (!ok) { this.respond(message, {}, 'Write failed'); break; }
-                    const display = prop.type === 'bool' ? (numVal ? 'true' : 'false') : String(numVal);
-                    this.respond(message, { value: display, type: prop.type });
+                    this.respond(message, { value: this.makeVar(name, numVal, prop.type).value, type: prop.type });
 
                 } else if (this.varRefMap.has(ref) && this.debugInfo && this.panel) {
                     // ── Object property ───────────────────────────────────────
@@ -736,16 +750,15 @@ export class BeguileDebugAdapter implements vscode.DebugAdapter {
                     const typeInfo = this.debugInfo.typeInfo(entry.typeName);
                     const prop = typeInfo?.props.find(p => p.bglName === name);
                     if (!prop) { this.respond(message, {}, `Unknown property: ${name}`); break; }
-                    if (prop.type !== 'int' && prop.type !== 'bool') {
-                        this.respond(message, {}, 'Only int and bool properties can be set');
+                    if (!this.isSettable(prop.type)) {
+                        this.respond(message, {}, 'Only int, bool, char and enum properties can be set');
                         break;
                     }
                     const propId = this.debugInfo.propNumber(prop.i6Name);
                     if (propId === undefined) { this.respond(message, {}, `Property number unknown for: ${prop.i6Name}`); break; }
                     const ok = await this.panel.setProp(entry.objAddr, propId, numVal);
                     if (!ok) { this.respond(message, {}, 'Write failed'); break; }
-                    const display = prop.type === 'bool' ? (numVal ? 'true' : 'false') : String(numVal);
-                    this.respond(message, { value: display, type: prop.type });
+                    this.respond(message, { value: this.makeVar(name, numVal, prop.type).value, type: prop.type });
 
                 } else if (ref >= 1000 && !this.varRefMap.has(ref) && this.debugInfo && this.panel && this.currentVmState) {
                     // ── Local variable ────────────────────────────────────────
@@ -756,6 +769,7 @@ export class BeguileDebugAdapter implements vscode.DebugAdapter {
                     if (!vmFrame) { this.respond(message, {}, 'Invalid frame'); break; }
 
                     const routine = this.debugInfo.routineByAddr(vmFrame.funcAddr)
+                                 ?? this.debugInfo.routineContaining(vmFrame.funcAddr)
                                  ?? (frameDepth === 0 && this.currentVmAddr !== undefined
                                      ? this.debugInfo.routineContaining(this.currentVmAddr)
                                      : undefined);
@@ -765,8 +779,8 @@ export class BeguileDebugAdapter implements vscode.DebugAdapter {
                     const type = routine
                         ? this.debugInfo.localVarType(routine.startAddr, name)
                         : undefined;
-                    if (type !== undefined && type !== 'int' && type !== 'bool') {
-                        this.respond(message, {}, 'Only int and bool locals can be set');
+                    if (type !== undefined && !this.isSettable(type)) {
+                        this.respond(message, {}, 'Only int, bool, char and enum locals can be set');
                         break;
                     }
                     // stackIdx: Quixe stack is also ordered outermost→innermost,
@@ -776,8 +790,7 @@ export class BeguileDebugAdapter implements vscode.DebugAdapter {
                     if (!ok) { this.respond(message, {}, 'Write failed'); break; }
                     // Update cached state so Variables pane is immediately consistent.
                     vmFrame.locals[local.frameOffset] = numVal;
-                    const display = type === 'bool' ? (numVal ? 'true' : 'false') : String(numVal);
-                    this.respond(message, { value: display, type: type ?? 'int' });
+                    this.respond(message, { value: this.makeVar(name, numVal, type).value, type: type ?? 'int' });
 
                 } else {
                     this.respond(message, {}, 'Cannot set variable in this scope');
@@ -790,6 +803,8 @@ export class BeguileDebugAdapter implements vscode.DebugAdapter {
                 this.hideI6Button();
                 this.varRefMap.clear();
                 this.arrayRefMap.clear();
+                this.inlineArrayMap.clear();
+                this.refPath.clear();
                 dbgLog(`continue → addr 0x${(this.currentVmAddr ?? 0).toString(16)}`);
                 this.panel?.sendContinue();
                 this.respond(message, { allThreadsContinued: true });
@@ -821,6 +836,8 @@ export class BeguileDebugAdapter implements vscode.DebugAdapter {
                 this.hideI6Button();
                 this.varRefMap.clear();
                 this.arrayRefMap.clear();
+                this.inlineArrayMap.clear();
+                this.refPath.clear();
                 this.lastStepCommand = message.command;
                 // Save the routine we're stepping FROM so step-over can detect calls
                 this.stepOriginRoutine = this.currentVmAddr !== undefined
@@ -945,11 +962,97 @@ export class BeguileDebugAdapter implements vscode.DebugAdapter {
         // Attribute a breakpoint stop to the file+line the user set it on, so stackTrace can
         // navigate there regardless of which pane is active. Step stops clear it.
         this.breakpointHitSource = isStep ? undefined : this.lookupBreakpointSite(vmAddr);
+        const spec = this.breakpointHitSource
+            ? this.breakpointSpecs.get(this.breakpointHitSource.file)?.get(this.breakpointHitSource.line) : undefined;
+        if (spec) { void this.checkBreakpoint(spec); return; }
         this.sendEvent('stopped', {
             reason: this.lastStopReason,
             threadId: 1,
             allThreadsStopped: true,
         });
+    }
+
+    /**
+     * A breakpoint with a condition, hit count or log message: it stops only when the condition holds
+     * and the hit count is reached; a logpoint writes its message and goes on.
+     */
+    private async checkBreakpoint(spec: BreakpointSpec): Promise<void> {
+        let stop = true;
+        if (spec.condition) {
+            const r = await this.evaluateCondition(spec.condition);
+            if (r === undefined) {
+                this.sendEvent('output', { category: 'console', output: `Breakpoint condition can't be evaluated: ${spec.condition}\n` });
+            } else {
+                stop = r;
+            }
+        }
+        if (stop) {
+            spec.hits++;
+            if (spec.hitCondition) { stop = this.hitConditionMet(spec.hitCondition, spec.hits); }
+        }
+        if (stop && spec.logMessage !== undefined) {
+            let text = spec.logMessage;
+            for (const m of spec.logMessage.match(/\{[^{}]+\}/g) ?? []) {
+                const r = await this.resolveExpression(m.slice(1, -1).trim(), 0);
+                const v = r === undefined ? undefined : r.words ? this.makeInlineArrayVar('', r.words, r.type ?? 'array<int>')
+                                                                 : await this.makeVarAsync('', r.raw, r.type);
+                text = text.replace(m, v === undefined ? m : String(v.value));
+            }
+            this.sendEvent('output', { category: 'console', output: text + '\n' });
+            stop = false;
+        }
+        if (stop) {
+            this.sendEvent('stopped', { reason: 'breakpoint', threadId: 1, allThreadsStopped: true });
+        } else {
+            this.clearInfHighlight();
+            this.hideI6Button();
+            this.varRefMap.clear(); this.arrayRefMap.clear(); this.inlineArrayMap.clear(); this.refPath.clear();
+            this.panel?.sendContinue();
+        }
+    }
+
+    /** `>= 5`, `== 5`, `> 5`, `% 5` or a bare `5` (the same as `>= 5`, as VS Code's other debuggers read it). */
+    private hitConditionMet(cond: string, hits: number): boolean {
+        const m = /^\s*(>=|==|>|%)?\s*(\d+)\s*$/.exec(cond);
+        if (!m) { return true; }
+        const n = parseInt(m[2], 10);
+        switch (m[1]) {
+            case '==': return hits === n;
+            case '>':  return hits > n;
+            case '%':  return n > 0 && hits % n === 0;
+            default:   return hits >= n;
+        }
+    }
+
+    /** `a == b` (or != < <= > >=), `!a`, or a bare expression; each side a path, a number, true/false/null or 'c'. */
+    private async evaluateCondition(cond: string): Promise<boolean | undefined> {
+        const operand = async (text: string): Promise<number | undefined> => {
+            const t = text.trim();
+            if (/^-?\d+$/.test(t)) { return parseInt(t, 10); }
+            if (/^\$[0-9A-Fa-f]+$/.test(t)) { return parseInt(t.slice(1), 16); }
+            if (/^'.'$/.test(t)) { return t.charCodeAt(1); }
+            if (/^(true|false|null)$/i.test(t)) { return /^true$/i.test(t) ? 1 : 0; }
+            const r = await this.resolveExpression(t, 0);
+            if (r === undefined || r.words) { return undefined; }
+            const ty = r.type ?? 'int';
+            return ty === 'uint' ? r.raw >>> 0 : this.signed(r.raw);
+        };
+        const m = /^(.+?)\s*(==|!=|<=|>=|<|>)\s*(.+)$/.exec(cond);
+        if (m) {
+            const a = await operand(m[1]), b = await operand(m[3]);
+            if (a === undefined || b === undefined) { return undefined; }
+            switch (m[2]) {
+                case '==': return a === b;
+                case '!=': return a !== b;
+                case '<':  return a < b;
+                case '<=': return a <= b;
+                case '>':  return a > b;
+                default:   return a >= b;
+            }
+        }
+        const neg = /^!\s*(.+)$/.exec(cond);
+        const v = await operand(neg ? neg[1] : cond);
+        return v === undefined ? undefined : neg ? v === 0 : v !== 0;
     }
 
     focusPanel(): void { this.panel?.focus(); }
@@ -1133,6 +1236,10 @@ export class BeguileDebugAdapter implements vscode.DebugAdapter {
         const val = (propNum !== undefined && this.panel)
             ? await this.panel.readProperty(objAddr, propNum)
             : null;
+        // A member array is its property's data (several words); a `ref` member holds one pointer.
+        if (Array.isArray(val) && val.length > 1 && p.type && p.type.startsWith('array<') && !p.type.startsWith('array<char>')) {
+            return this.makeInlineArrayVar(p.bglName, val, p.type);
+        }
         const raw = Array.isArray(val) ? (val[0] ?? 0) : (val ?? 0);
         return this.makeVarAsync(p.bglName, raw, p.type || undefined);
     }
@@ -1158,6 +1265,112 @@ export class BeguileDebugAdapter implements vscode.DebugAdapter {
         }));
     }
 
+    /**
+     * Evaluate a Watch/hover expression: a name (local, parameter, member of self, global or object)
+     * followed by `.member`, `[index]` or `.length` steps. Names are matched as Beguile matches them,
+     * ignoring case. `words` carries a member array read from its property's data.
+     */
+    private async resolveExpression(expr: string, frameId: number):
+            Promise<{ raw: number; type: string | undefined; words?: number[] } | undefined> {
+        const di = this.debugInfo;
+        if (!di || !this.currentVmState || !expr) { return undefined; }
+        const steps = expr.match(/[A-Za-z_]\w*|\[\s*-?\d+\s*\]|\./g);
+        if (!steps || steps.join('').replace(/\s/g, '') !== expr.replace(/\s/g, '')) { return undefined; }
+        const eq = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
+        const WORDSIZE = this.config?.isZMachine ? 2 : 4;
+
+        // The receiver of a method that is running, for `self` and bare member names.
+        const selfAddr = di.selfAddress();
+        const selfObj = selfAddr !== undefined ? (this.currentVmState.globals[selfAddr] ?? 0) : 0;
+        const selfName = selfObj ? di.objectByAddr(selfObj) : undefined;
+        const selfType = selfName ? di.objectTypeInfoFor(selfName) : undefined;
+
+        let cur: { raw: number; type: string | undefined; words?: number[] } | undefined;
+        const head = steps[0];
+        const frames = this.currentVmState.frames;
+        const vmFrame = frames[frames.length - 1 - frameId];
+        if (eq(head, 'self') && selfObj) {
+            cur = { raw: selfObj, type: selfType?.name ?? 'object' };
+        }
+        if (!cur && vmFrame) {
+            const routine = di.routineByAddr(vmFrame.funcAddr) ?? di.routineContaining(vmFrame.funcAddr)
+                         ?? (frameId === 0 && this.currentVmAddr !== undefined ? di.routineContaining(this.currentVmAddr) : undefined);
+            const local = routine?.locals.find(l => eq(l.name, head));
+            if (routine && local) {
+                cur = { raw: (vmFrame.locals[local.frameOffset] ?? 0) as number, type: di.localVarType(routine.startAddr, local.name) };
+            } else if (routine && this.panel) {
+                const spilled = di.spilledLocals(routine.startAddr).find(x => eq(x.name, head));
+                const frm = routine.locals.find(l => l.name === '_bglFrm');
+                const frmVal = frm ? vmFrame.locals[frm.frameOffset] : 0;
+                if (spilled && frmVal) {
+                    cur = { raw: (await this.panel.readWord(frmVal + spilled.index * 2)) ?? 0, type: spilled.type };
+                }
+            }
+        }
+        if (!cur && selfType && selfObj) {
+            const prop = selfType.props.find(p => eq(p.bglName, head));
+            if (prop) { cur = await this.readMember(selfObj, prop); }
+        }
+        if (!cur) {
+            const g = di.globals().find(x => eq(x.name, head));
+            if (g) { cur = { raw: this.currentVmState.globals[g.address] ?? 0, type: di.globalVarType(g.name) }; }
+        }
+        if (!cur) {
+            const a = di.userGlobalArrays().find(x => eq(x.name, head));
+            if (a) { cur = { raw: a.address, type: di.globalVarType(a.name) }; }
+        }
+        if (!cur) {
+            const o = di.userGlobalObjects().find(x => eq(x.name, head));
+            if (o) { cur = { raw: o.address, type: di.objectTypeInfoFor(o.name)?.name ?? 'object' }; }
+        }
+
+        for (let i = 1; cur && i < steps.length; i++) {
+            const step = steps[i];
+            if (step === '.') { continue; }
+            const t = cur.type ?? '';
+            const isArray = t === 'array' || t.startsWith('array<') || t.startsWith('rawarray');
+            if (step.startsWith('[')) {
+                const idx = parseInt(step.slice(1, -1), 10);
+                const elemType = this.arrayElementType(t);
+                if (cur.words) {
+                    if (idx < 0 || idx >= cur.words.length - 1) { return undefined; }
+                    cur = { raw: cur.words[idx], type: elemType };
+                } else if (isArray && this.panel && cur.raw) {
+                    const offset = t.startsWith('rawarray') ? 0 : 1;
+                    cur = { raw: (await this.panel.readWord(cur.raw + (idx + offset) * WORDSIZE)) ?? 0, type: elemType };
+                } else { return undefined; }
+                continue;
+            }
+            if (isArray && eq(step, 'length')) {
+                if (cur.words) { cur = { raw: cur.words[cur.words.length - 1], type: 'int' }; continue; }
+                if (!this.panel || !cur.raw) { return undefined; }
+                const magic = await this.panel.readWord(cur.raw - 2 * WORDSIZE);
+                cur = { raw: (await this.panel.readWord(magic === 0x9084 ? cur.raw - WORDSIZE : cur.raw)) ?? 0, type: 'int' };
+                continue;
+            }
+            if (!cur.raw) { return undefined; }
+            const objName = di.objectByAddr(cur.raw);
+            const info = (t ? di.typeInfo(t) ?? di.objectTypeInfoFor(t) : undefined)
+                      ?? (objName ? di.objectTypeInfoFor(objName) : undefined);
+            const prop = info?.props.find(p => eq(p.bglName, step));
+            if (!prop) { return undefined; }
+            cur = await this.readMember(cur.raw, prop);
+        }
+        return cur;
+    }
+
+    /** One member of an object: its value and type, or the words of a member array held in the property. */
+    private async readMember(objAddr: number, p: { i6Name: string; type: string }):
+            Promise<{ raw: number; type: string | undefined; words?: number[] } | undefined> {
+        const propNum = this.debugInfo?.propNumber(p.i6Name);
+        if (propNum === undefined || !this.panel) { return undefined; }
+        const val = await this.panel.readProperty(objAddr, propNum);
+        if (Array.isArray(val) && val.length > 1 && p.type?.startsWith('array<') && !p.type.startsWith('array<char>')) {
+            return { raw: 0, type: p.type, words: val };
+        }
+        return { raw: Array.isArray(val) ? (val[0] ?? 0) : (val ?? 0), type: p.type || undefined };
+    }
+
     private async makeVarAsync(name: string, raw: number, bglType: string | undefined): Promise<any> {
         // Tracked word arrays (array<var>, array<int>, array<object>, …) render as an expandable row.
         // Also accept bare "array" (older/sized locals whose element type didn't reach the .bgldbg —
@@ -1166,6 +1379,11 @@ export class BeguileDebugAdapter implements vscode.DebugAdapter {
         if (bglType && (bglType === 'array' || bglType.startsWith('array<') || bglType.startsWith('rawarray'))
             && !bglType.startsWith('array<char>')) {
             return this.makeArrayVar(name, raw, bglType);
+        }
+        if (bglType === 'bytearray' || bglType?.startsWith('array<char>')) {
+            if (!raw) { return { name, value: 'null', type: 'array<char>', variablesReference: 0 }; }
+            const text = await this.readByteArray(raw);
+            return { name, value: text !== undefined ? `"${text}"` : `0x${(raw >>> 0).toString(16)}`, type: 'array<char>', variablesReference: 0 };
         }
         let decoded: string | undefined;
         if (bglType === 'string' && this.panel && raw) {
@@ -1234,29 +1452,63 @@ export class BeguileDebugAdapter implements vscode.DebugAdapter {
             return { name, value: `rawarray<${elemType}> (size ${declared})`, type: bglType, variablesReference: varRef };
         }
 
-        // Tracked/plain array<T>: element 0 lives at word 1 (word 0 is the header/count).
-        // Capacity: prefer the compile-time declared size (array<T>[N]) — it survives even when the
-        // in-memory tracked header word is overwritten (e.g. a buffer passed to glk_select). Fall
-        // back to the runtime header (word[0] − 2) for unsized/dynamic arrays.
-        let capacity = declared;
-        if (capacity === undefined) {
-            const header = await this.panel.readWord(base);
-            if (header == null) { return diag(`array<${elemType}> ⟨readWord→null @0x${(base >>> 0).toString(16)}⟩`); }
-            capacity = header - 2;
-            if (capacity < 0 || capacity > 4096) {
-                return diag(`array<${elemType}> ⟨hdr=${header} ws=${WORDSIZE} @0x${(base >>> 0).toString(16)}⟩`);
+        // array<T> layout (`_bglArrTracked` in _array.bgl): word[-2] = $9084 (or $DEAD once freed),
+        // word[-1] = length, word[0] = capacity, word[1..capacity] = elements.
+        const magic    = await this.panel.readWord(base - 2 * WORDSIZE);
+        if (magic === 0xDEAD) { return diag(`array<${elemType}> (freed)`); }
+        const length   = await this.panel.readWord(base - WORDSIZE);
+        const header   = await this.panel.readWord(base);
+        if (header == null) { return diag(`array<${elemType}> ⟨unreadable @0x${(base >>> 0).toString(16)}⟩`); }
+        const capacity = declared ?? header;
+        if (capacity < 0 || capacity > 4096) {
+            return diag(`array<${elemType}> ⟨capacity ${header} @0x${(base >>> 0).toString(16)}⟩`);
+        }
+        const tracked = magic === 0x9084 && length != null && length >= 0 && length <= capacity;
+        const shown = tracked ? length! : capacity;
+        const varRef = this.nextVarRef++;
+        this.arrayRefMap.set(varRef, { base, elemType, capacity: shown, dataOffset: 1 });
+        const value = tracked ? `array<${elemType}> [${length}] (capacity ${capacity})` : `array<${elemType}> (size ${capacity})`;
+        return { name, value, type: bglType, variablesReference: varRef };
+    }
+
+    /** A member array held in its property's data: the words are the elements, the last word the length. */
+    private makeInlineArrayVar(name: string, words: number[], bglType: string): any {
+        const elemType = this.arrayElementType(bglType);
+        const capacity = words.length - 1;
+        const length = words[capacity];
+        const n = length >= 0 && length <= capacity ? length : capacity;
+        const varRef = this.nextVarRef++;
+        this.inlineArrayMap.set(varRef, { values: words.slice(0, n), elemType });
+        return { name, value: `array<${elemType}> [${n}] (capacity ${capacity})`, type: bglType, variablesReference: varRef };
+    }
+
+    /** A word read as the signed value a Beguile int holds (reads come back unsigned). */
+    private signed(raw: number): number {
+        if (this.config?.isZMachine) { return raw > 0x7FFF && raw <= 0xFFFF ? raw - 0x10000 : raw; }
+        return raw > 0x7FFFFFFF && raw <= 0xFFFFFFFF ? raw - 0x100000000 : raw;
+    }
+
+    /** The text of an `array<char>`: capacity in the word before it, its length in word 0, its bytes after. */
+    private async readByteArray(addr: number): Promise<string | undefined> {
+        if (!this.panel || !addr) { return undefined; }
+        const WORDSIZE = this.config?.isZMachine ? 2 : 4;
+        const length = await this.panel.readWord(addr);
+        if (length == null || length < 0 || length > 1024) { return undefined; }
+        let text = '';
+        for (let i = 0; i < length; i += WORDSIZE) {
+            const w = await this.panel.readWord(addr + WORDSIZE + i);
+            if (w == null) { return undefined; }
+            for (let b = 0; b < WORDSIZE && i + b < length; b++) {
+                text += String.fromCharCode((w >>> (8 * (WORDSIZE - 1 - b))) & 0xFF);
             }
         }
+        return text;
+    }
 
-        // Tracked length lives at word[capacity+1] and is only trustworthy when the $9084 magic at
-        // word[capacity+2] is intact; show it only then (a clobbered buffer leaves both garbage).
-        const magic  = await this.panel.readWord(base + (capacity + 2) * WORDSIZE);
-        const length = await this.panel.readWord(base + (capacity + 1) * WORDSIZE);
-        const lenNote = (magic === 0x9084 && length != null) ? `; len ${length}` : '';
-
-        const varRef = this.nextVarRef++;
-        this.arrayRefMap.set(varRef, { base, elemType, capacity, dataOffset: 1 });
-        return { name, value: `array<${elemType}> (size ${capacity}${lenNote})`, type: bglType, variablesReference: varRef };
+    /** Types whose value is one word the Variables pane can write. */
+    private isSettable(type: string | undefined): boolean {
+        return type === 'int' || type === 'bool' || type === 'char' || type === 'uint'
+            || (!!type && !!this.debugInfo?.isEnum(type));
     }
 
     private makeVar(name: string, raw: number, bglType: string | undefined, decoded?: string): any {
@@ -1267,20 +1519,48 @@ export class BeguileDebugAdapter implements vscode.DebugAdapter {
             return { name, value: decoded !== undefined ? `"${decoded}"` : '(string)', type: 'string', variablesReference: 0 };
         }
         if (bglType === 'int' || bglType === undefined) {
-            return { name, value: String(raw), type: bglType ?? 'int', variablesReference: 0 };
+            return { name, value: String(this.signed(raw)), type: bglType ?? 'int', variablesReference: 0 };
         }
-        // Enum type — show "ValueName (N)"
+        if (bglType === 'uint') {
+            return { name, value: String(raw >>> 0), type: 'uint', variablesReference: 0 };
+        }
+        if (bglType === 'char') {
+            const c = raw & 0xFF;
+            const shown = c >= 32 && c < 127 ? `'${String.fromCharCode(c)}' (${c})` : String(c);
+            return { name, value: shown, type: 'char', variablesReference: 0 };
+        }
+        if (bglType === 'float' && !this.config?.isZMachine) {
+            const buf = new DataView(new ArrayBuffer(4));
+            buf.setUint32(0, raw >>> 0);
+            return { name, value: String(buf.getFloat32(0)), type: 'float', variablesReference: 0 };
+        }
+        // Enum type — show "ValueName (N)"; a bnum's set shows its flags.
         if (this.debugInfo?.isEnum(bglType)) {
-            const label = this.debugInfo.enumValueName(bglType, raw);
+            let label = this.debugInfo.enumValueName(bglType, raw);
+            if (label === undefined && raw > 0) {
+                const flags: string[] = [];
+                for (let bit = 1; bit > 0 && bit <= raw; bit <<= 1) {
+                    if (raw & bit) {
+                        const f = this.debugInfo.enumValueName(bglType, bit);
+                        if (f === undefined) { flags.length = 0; break; }
+                        flags.push(f);
+                    }
+                }
+                if (flags.length > 0) { label = flags.join(' | '); }
+            }
             const display = label !== undefined ? `${label} (${raw})` : String(raw);
             return { name, value: display, type: bglType, variablesReference: 0 };
         }
         // Object type — expandable if we have type info for it
         const objTypeInfo = this.debugInfo?.typeInfo(bglType) ?? this.debugInfo?.objectTypeInfoFor(bglType);
         if (objTypeInfo) {
+            if (!raw) { return { name, value: 'null', type: objTypeInfo.name, variablesReference: 0 }; }
             const varRef = this.nextVarRef++;
             this.varRefMap.set(varRef, { objAddr: raw, typeName: objTypeInfo.name });
-            return { name, value: objTypeInfo.name, type: objTypeInfo.name, variablesReference: varRef };
+            const objName = this.debugInfo?.objectByAddr(raw);
+            const shown = objName && objName.toLowerCase() !== objTypeInfo.name.toLowerCase()
+                ? `${objName} (${objTypeInfo.name})` : objTypeInfo.name;
+            return { name, value: shown, type: objTypeInfo.name, variablesReference: varRef };
         }
         // Known type name but no property info yet — show as plain int
         return { name, value: String(raw), type: bglType, variablesReference: 0 };

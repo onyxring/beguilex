@@ -108,6 +108,8 @@ export class DebugInfo {
     private objSymProps  = new Map<string, BglProp[]>();
     /** I6 object identifier → Glulx memory address (from .dbg <object> entries) */
     private i6ObjMap     = new Map<string, number>();
+    /** I6 array identifier (lowercased) → its address: a file-scope Beguile array is an I6 `Array`. */
+    private i6ArrayMap   = new Map<string, number>();
     /** Reverse: Glulx memory address → I6 object identifier */
     private i6AddrToObj  = new Map<number, string>();
     /** Address of the I6 `self` global variable (or undefined if not in .dbg) */
@@ -381,6 +383,12 @@ export class DebugInfo {
             }
         }
 
+        // ── Array table (identifier → address) ─────────────────────────────────
+        const arrRe = /<array><identifier>([^<]+)<\/identifier><value>\s*(\d+)\s*<\/value>/g;
+        while ((m = arrRe.exec(xml)) !== null) {
+            this.i6ArrayMap.set(m[1].toLowerCase(), parseInt(m[2], 10));
+        }
+
         // ── self global address ───────────────────────────────────────────────
         const selfM = /<global-variable><identifier>self<\/identifier><address>\s*(\d+)\s*<\/address><\/global-variable>/.exec(xml);
         if (selfM) { this.selfGlobalAddr = parseInt(selfM[1], 10); }
@@ -584,6 +592,22 @@ export class DebugInfo {
             if (addr !== undefined) {
                 result.push({ name, address: addr });
             }
+        }
+        return result;
+    }
+
+    /**
+     * File-scope arrays the program declares (from the [types] `global` lines whose type is an array),
+     * each with its address — the array itself, not a variable holding it.
+     */
+    userGlobalArrays(): GlobalInfo[] {
+        const result: GlobalInfo[] = [];
+        for (const [name, type] of this.globalTyped) {
+            if (name.startsWith('_bgl')) { continue; }
+            const t = String(type);
+            if (!(t === 'array' || t === 'bytearray' || t.startsWith('array<') || t.startsWith('rawarray'))) { continue; }
+            const addr = this.i6ArrayMap.get(name.toLowerCase());
+            if (addr !== undefined && addr !== 0) { result.push({ name, address: addr }); }
         }
         return result;
     }

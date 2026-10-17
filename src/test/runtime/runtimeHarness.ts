@@ -580,8 +580,11 @@ function libStepOverPlan(): void {
     const base = path.join(FIX, 'rt_calls_g');
     const di  = DebugInfo.load(base + '.bgl.bgldbg', base + '.bgl.transpiled.inf.dbg');
     const rsp = routineSeqPts(base + '.bgl.transpiled.inf.dbg');
-    const lib = rsp.get('obj') ?? [];                        // a library routine with many seq-points
-    ok(lib.length >= 3, `libstepover: found a library routine (obj) with seq-points (${lib.length})`);
+    // A library routine with many seq-points: the longest one that isn't the program's own.
+    const own = new Set(['add', 'fib', 'initialise', 'main']);
+    const lib = [...rsp.entries()].filter(([n]) => !own.has(n.toLowerCase()))
+                                  .map(([, pts]) => pts).sort((a, b) => b.length - a.length)[0] ?? [];
+    ok(lib.length >= 3, `libstepover: found a library routine with seq-points (${lib.length})`);
     if (lib.length < 3) { return; }
     const inside = lib[1].addr;
     const routine = di.routineContaining(inside)!;
@@ -627,6 +630,53 @@ function rtInputYield(kind: Kind): void {
 // engine) don't cleanly re-init for a second boot in the same process, so the PARENT
 // runs each scenario in its own child process. A scenario may continue/step its single
 // VM freely (multiple stops) — it just must not create a second VM.
+/** array layout: what the Variables pane reads for an array<int> — word[-2] = $9084, word[-1] = length,
+ * word[0] = capacity, word[1..] = elements — for a local (heap) array, on both interpreters. */
+function rtArrays(kind: Kind): void {
+    const base  = path.join(FIX, kind === 'zvm' ? 'rt_arrays_z' : 'rt_arrays_g');
+    const story = base + (kind === 'zvm' ? '.z8' : '.ulx');
+    const di  = DebugInfo.load(base + '.bgl.bgldbg', base + '.bgl.transpiled.inf.dbg');
+    const rsp = routineSeqPts(base + '.bgl.transpiled.inf.dbg');
+    const fill = rsp.get('fill') ?? [];
+    ok(fill.length > 0, `${kind}/arrays: found fill seq-points`);
+    if (fill.length === 0) { return; }
+    const d = kind === 'zvm' ? makeZvmDriver(story) : makeQuixeDriver(story);
+    d.setAllSeqPts(allSeqPtAddrs(base + '.bgl.transpiled.inf.dbg'));
+    // The `return` line (11 in the fixture), before the routine's exit frees loc.
+    const src = di.allBglSourceFiles().find(f => f.includes('rt_arrays'));
+    const at = src ? di.bglToVmAddrs(src, 11) : [];
+    ok(at.length > 0, `${kind}/arrays: the return line has code`);
+    if (at.length === 0) { return; }
+    d.setBreakpoints([Math.min(...at)]);
+    const stop = d.run();
+    ok(stop !== null, `${kind}/arrays: stopped in fill`);
+    if (!stop) { return; }
+    const routine = di.routineContaining(stop.pc);
+    const loc = routine?.locals.find(l => l.name === 'loc');
+    ok(!!loc, `${kind}/arrays: fill has the local 'loc'`);
+    if (!routine || !loc) { return; }
+    eq(di.localVarType(routine.startAddr, 'loc'), 'array<int>[4]', `${kind}/arrays: loc's type reaches the debugger`);
+    const frames = d.getState().frames;
+    const arr = frames[frames.length - 1].locals[loc.frameOffset];
+    ok(!!arr, `${kind}/arrays: loc holds an array address`);
+    const W = kind === 'zvm' ? 2 : 4;
+    const signed = (v: number | null) => v === null ? null : (W === 2 ? (v > 0x7FFF ? v - 0x10000 : v) : (v | 0));
+    eq(d.readWord(arr - 2 * W), 0x9084, `${kind}/arrays: word[-2] is the $9084 marker`);
+    eq(d.readWord(arr - W), 2, `${kind}/arrays: word[-1] is the length`);
+    eq(d.readWord(arr), 4, `${kind}/arrays: word[0] is the capacity`);
+    eq(signed(d.readWord(arr + W)), 7, `${kind}/arrays: element 0`);
+    eq(signed(d.readWord(arr + 2 * W)), -9, `${kind}/arrays: element 1 (negative, read back signed)`);
+    // A file-scope array is an I6 `Array`: the debugger finds it by its address, with the same layout.
+    const g = di.userGlobalArrays().find(x => x.name === 'nums');
+    ok(!!g, `${kind}/arrays: the global array 'nums' is listed`);
+    eq(di.globalVarType('nums'), 'array<int>', `${kind}/arrays: nums keeps its element type`);
+    if (!g) { return; }
+    eq(d.readWord(g.address - 2 * W), 0x9084, `${kind}/arrays: nums word[-2] is the $9084 marker`);
+    eq(d.readWord(g.address - W), 3, `${kind}/arrays: nums length`);
+    eq(d.readWord(g.address), 3, `${kind}/arrays: nums capacity`);
+    eq(signed(d.readWord(g.address + 2 * W)), -5, `${kind}/arrays: nums element 1`);
+}
+
 const SCENARIOS: Record<string, () => void> = {
     'zvm-spill':      zvmSpillValues,
     'zvm-add':        () => rtAddValues('zvm'),
@@ -646,6 +696,8 @@ const SCENARIOS: Record<string, () => void> = {
     'quixe-nextreturn': () => rtNextReturn('quixe'),
     'quixe-inputyield': () => rtInputYield('quixe'),
     'libstepover':      libStepOverPlan,
+    'zvm-arrays':       () => rtArrays('zvm'),
+    'quixe-arrays':     () => rtArrays('quixe'),
     'libpaths':         libPaths,
 };
 

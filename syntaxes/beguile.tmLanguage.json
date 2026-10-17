@@ -225,8 +225,15 @@
     },
 
     "numeric-literals": {
-      "name": "constant.numeric.integer.beguile",
-      "match": "\\b\\d+\\b"
+      "patterns": [
+        { "name": "constant.numeric.binary.beguile", "match": "\\$\\$[01]+\\b" },
+        {
+          "comment": "Hex is $ then digits; a letter-led value is written in capitals ($FF), so emitter placeholders ($face) stay variables.",
+          "name": "constant.numeric.hex.beguile",
+          "match": "\\$(?:[0-9][0-9A-Fa-f]*|[A-F][0-9A-F]*)\\b"
+        },
+        { "name": "constant.numeric.integer.beguile", "match": "\\b\\d+\\b" }
+      ]
     },
 
     "emitter-vars": {
@@ -251,7 +258,7 @@
         {
           "comment": "#define NAME — value portion is left unscoped so the main grammar colors numbers/strings/identifiers naturally (matches C/C++/C# behavior). Case-insensitive.",
           "name": "meta.preprocessor.define.beguile",
-          "match": "(?i)(#define(?:i6)?)\\s+([a-zA-Z_][a-zA-Z0-9_]*)",
+          "match": "(?i)(#(?:define(?:i6)?|declare|redef|undef))\\s+([a-zA-Z_][a-zA-Z0-9_]*)",
           "captures": {
             "1": { "name": "keyword.control.directive.define.beguile" },
             "2": { "name": "entity.name.constant.beguile" }
@@ -281,7 +288,7 @@
         {
           "comment": "#message, #warning, #error, #exit, #using directives (case-insensitive).",
           "name": "keyword.control.directive.beguile",
-          "match": "(?i)#(?:message|warning|error|exit|using)\\b"
+          "match": "(?i)#(?:message|warning|error|exit|using|storedEmitFirst|storedEmitLast)\\b"
         },
         {
           "comment": "#beguilerSettings block header or property reference (#beguilerSettings.propName). Case-insensitive.",
@@ -358,7 +365,7 @@
     "keywords-control": {
       "comment": "Case-insensitive — Beguile lexer lowercases all identifiers (see project_beguile_case_insensitive memory).",
       "name": "keyword.control.beguile",
-      "match": "(?i)\\b(if|else|for|while|do|switch|case|break|continue|return|rtrue|rfalse|in|to|try|catch|throw|new|delete)\\b"
+      "match": "(?i)\\b(if|else|for|while|do|until|switch|case|break|continue|return|rtrue|rfalse|in|to|try|catch|throw|new|delete|typeof)\\b"
     },
 
     "keywords-declaration": {
@@ -370,13 +377,13 @@
     "keywords-type-declaration": {
       "comment": "Case-insensitive — `class` / `Class` / `CLASS` all match.",
       "name": "storage.type.beguile",
-      "match": "(?i)\\b(class|struct(?=\\s+[A-Za-z_])|object|enum|bnum|verb|grammar|attribute|property|patternElement|grammarRule|grammarRuleList)\\b"
+      "match": "(?i)\\b(class|struct(?=\\s+[A-Za-z_])|union(?=\\s+[A-Za-z_])|object|enum|bnum|verb|grammar|attribute|property|patternElement|grammarRule|grammarRuleList)\\b"
     },
 
     "keywords-type-primitive": {
       "comment": "Case-insensitive.",
       "name": "storage.type.primitive.beguile",
-      "match": "(?i)\\b(int|uint|bool|string|char|void|var|array|rawArray|func|eBool|dictionaryWord)\\b"
+      "match": "(?i)\\b(int|uint|bool|string|char|float|void|var|auto|array|rawArray|func|eBool|dictionaryWord|intLiteral|negativeIntLiteral|charLiteral|stringLiteral|dictionaryWordLiteral|interpolatedStringLiteral)\\b"
     },
 
     "constants-language": {
@@ -386,9 +393,9 @@
     },
 
     "keyword-self": {
-      "comment": "Case-insensitive — `self` / `Self` / `SELF` all match.",
+      "comment": "Case-insensitive — `self` / `Self` / `SELF` all match; `outer` names an accessor's host.",
       "name": "variable.language.self.beguile",
-      "match": "(?i)\\bself\\b"
+      "match": "(?i)\\b(self|outer)\\b"
     },
 
     "function-definition": {
@@ -403,15 +410,16 @@
       "patterns": [
         {
           "comment": "operator keyword in operator declarations (operator ?, operator switch, etc.)",
-          "match": "\\b(operator)\\s+([?]|switch|==|!=|=~|<|>|<=|>=|\\+|-|\\*|/|%)",
+          "match": "\\b(operator)\\s*([?]|switch|:==|==|!=|=~|<=>|<=|>=|<|>|\\+\\+|--|\\+=|-=|\\*=|/=|%=|\\+|-|\\*|/|%|\\(\\)|\\[\\]|=|!)",
           "captures": {
             "1": { "name": "storage.modifier.beguile" },
             "2": { "name": "entity.name.function.beguile" }
           }
         },
+        { "name": "storage.modifier.beguile", "match": "\\boperator\\b" },
         {
           "name": "keyword.operator.beguile",
-          "match": "\\?\\.|\\.\\.|==|!=|=~|<<=|>>=|<=|>=|=>|&&|\\|\\||\\+\\+|--|\\+=|-=|\\*=|/=|%=|\\|=|&=|\\^=|<<|>>|\\?\\?"
+          "match": ":==|:=|<=>|\\?\\.|\\.\\.|==|!=|=~|\\?=|<<=|>>=|<=|>=|=>|&&|\\|\\||\\+\\+|--|\\+=|-=|\\*=|/=|%=|\\|=|&=|\\^=|<<|>>|\\?\\?|::"
         },
         {
           "name": "keyword.operator.beguile",
