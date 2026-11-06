@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { registerI6PatchCommands } from './i6Patch';
 import * as path from 'path';
 import * as cp from 'child_process';
 import * as fs from 'fs';
@@ -237,11 +238,11 @@ export function activate(context: vscode.ExtensionContext) {
                 const pos = ed.selection.active;
                 const linePrefix = ed.document.lineAt(pos.line).text.substring(0, pos.character);
                 // Cursor inside an unclosed include/path delimiter — either:
-                //   `#include`/`#includeI6` <…> or "…"  (file/library completion), or
+                //   `#include`/`#includeI6`/`#mergeI6` <…> or "…"  (file/library completion), or
                 //   `includePaths = "…"` inside #beguilerSettings  (directory completion).
                 // Tolerates the optional `?`/`@` markers. `[^"<>]*$` = no closing delimiter before
                 // the cursor (a closing quote AFTER the cursor is fine — linePrefix stops there).
-                if (/(#include(i6)?\s*\??\s*@?\s*["<]|includepaths\s*=\s*")[^"<>]*$/i.test(linePrefix)) {
+                if (/(#(include(i6)?|mergei6)\s*\??\s*@?\s*["<]|includepaths\s*=\s*")[^"<>]*$/i.test(linePrefix)) {
                     void vscode.commands.executeCommand('editor.action.triggerSuggest');
                 }
             }, 0);
@@ -459,6 +460,7 @@ export function activate(context: vscode.ExtensionContext) {
         traceOutputChannel: traceChannel,
     };
     lspClient = new LanguageClient('beguile', 'Beguile Language Server', serverOptions, clientOptions);
+    registerI6PatchCommands(context, () => lspClient, () => beguilerCommand().bin);
 
     const inactiveDecoration = vscode.window.createTextEditorDecorationType({
         opacity: '0.3',

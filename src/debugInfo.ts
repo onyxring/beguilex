@@ -270,20 +270,22 @@ export class DebugInfo {
         // ADDITIVE form `++include_path=` (one per dir, several lines), so match one-or-two `+` and
         // collect EVERY directive (the old single-`+`, break-after-one parse found none → library
         // frames resolved to a non-existent path in the output folder).
+        // I6 searches in its own order: `+include_path=` sets the list and `++include_path=` puts its
+        // dirs in FRONT of it, so the last `++` line is searched first. Patched library copies rely on that.
         const infPath = dbgPath.replace(/\.dbg$/, '');
-        const i6SearchDirs: string[] = [path.dirname(dbgPath)];
+        let includeDirs: string[] = [];
         try {
             const infContent = fs.readFileSync(infPath, 'utf8');
             for (const line of infContent.split('\n')) {
-                const m2 = /^!%\s*\+\+?include_path=(.+)/.exec(line.trim());
+                const m2 = /^!%\s*(\+\+?)include_path=(.+)/.exec(line.trim());
                 if (m2) {
-                    for (const p of m2[1].split(',')) {
-                        const dir = p.trim();
-                        if (dir && !i6SearchDirs.includes(dir)) { i6SearchDirs.push(dir); }
-                    }
+                    const dirs = m2[2].split(',').map(p => p.trim()).filter(d => d);
+                    includeDirs = m2[1] === '++' ? [...dirs, ...includeDirs] : dirs;
                 }
             }
         } catch { /* .inf not readable — fall back to dbg dir only */ }
+        const i6SearchDirs: string[] = [path.dirname(dbgPath)];
+        for (const dir of includeDirs) { if (!i6SearchDirs.includes(dir)) { i6SearchDirs.push(dir); } }
 
         // ── Source file index table ─────────────────────────────────────────
         // <given-path> entries appear in document order; their position (0-based)
@@ -603,7 +605,7 @@ export class DebugInfo {
     userGlobalArrays(): GlobalInfo[] {
         const result: GlobalInfo[] = [];
         for (const [name, type] of this.globalTyped) {
-            if (name.startsWith('_bgl')) { continue; }
+            if (name.startsWith('_bgl') || /^bglr[a-z]{2,}$/.test(name)) { continue; }
             const t = String(type);
             if (!(t === 'array' || t === 'bytearray' || t.startsWith('array<') || t.startsWith('rawarray'))) { continue; }
             const addr = this.i6ArrayMap.get(name.toLowerCase());

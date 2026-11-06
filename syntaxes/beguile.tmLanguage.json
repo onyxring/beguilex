@@ -246,9 +246,9 @@
       "comment": "All preprocessor directive matches are case-insensitive (Beguile lexer is case-insensitive — see project_beguile_case_insensitive memory).",
       "patterns": [
         {
-          "comment": "#include <system> or #include \"path\" (case-insensitive)",
+          "comment": "#include <system>, #include \"path\", #includeI6 and #mergeI6 (case-insensitive)",
           "name": "meta.preprocessor.include.beguile",
-          "match": "(?i)(#include(?:I6)?)\\s*(?:(<[^>]*>)|(\"[^\"]*\"))",
+          "match": "(?i)(#include(?:I6)?|#mergeI6)\\s*(?:(<[^>]*>)|(\"[^\"]*\"))",
           "captures": {
             "1": { "name": "keyword.control.directive.include.beguile" },
             "2": { "name": "string.quoted.other.lt-gt.beguile" },

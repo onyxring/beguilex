@@ -24,6 +24,10 @@ This is an experimental preview. The language and compiler are evolving rapidly 
 
 Compile and play .bgl games directly in VS Code using an embedded interpreter panel. Run **Beguile: Play** or **Beguile: Debug** from the Command Palette.
 
+## Inform 6 Patches
+
+An extension can change lines inside Inform 6 library routines with `#mergeI6 "name"` and a patch file, instead of replacing whole routines. Open any Inform 6 file (`.h`, `.inf`) and click **Create Patch** in its title bar, or right-click a `.bgl` file and choose **Create I6 Patch**: a copy of the Inform 6 file opens to edit, and each save writes the patch. While a copy is open you are in patch mode: the status bar and the top of the copy say so, and **Stop editing patch** ends it. Above each `#mergeI6` line, **Edit patch** reopens the copy and **Add file to patch** adds another Inform 6 file. Any unified diff (`diff -u`, `git diff`) also works as a patch.
+
 ## Debugger
 
 - Breakpoints in .bgl, .inf, and .h source files
@@ -34,10 +38,10 @@ Compile and play .bgl games directly in VS Code using an embedded interpreter pa
 
 ## Install
 
-Download the latest `.vsix` from [Releases](https://github.com/onyxring/beguilex/releases), then:
+The `.vsix` ships with the compiler: each [Beguiler release](https://github.com/onyxring/beguiler/releases) archive has it in a `beguilex` folder, built from this repository at the same tag, and it is also attached to the release on its own. Then:
 
 ```sh
-code --install-extension beguile-language-0.1.0-preview.1.vsix
+code --install-extension beguile-language-<version>.vsix
 ```
 
 Or in VS Code: **Extensions** view → `⋯` menu → **Install from VSIX...**

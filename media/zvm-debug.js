@@ -27,11 +27,16 @@
     /* ── Debug output capture ────────────────────────────────────────── */
     /* Wraps ZVM._print to mirror game text to the extension host in
      * real-time (via DAP output event) so it appears in the Debug Console
-     * immediately, without waiting for Glk.update() to flush the panel. */
+     * immediately, without waiting for Glk.update() to flush the panel.
+     * ZVM ends lines with '\r', which the Debug Console does not break on,
+     * and only text bound for the story window is mirrored: not the status
+     * line (upper window) or print_to_array captures (stream 3). */
     ZVM.prototype._print = function(text) {
+        var io = this.io;
+        var shown = !(io.streams[3].length || (io.currentwin && this.upperwin));
         _origPrint.call(this, text);
-        if (window._bglDebugOutput) {
-            window._bglDebugOutput(text);
+        if (window._bglDebugOutput && shown) {
+            window._bglDebugOutput(text.replace(/\r/g, '\n'));
         }
     };
     /* ── Patched start() ─────────────────────────────────────────────── */

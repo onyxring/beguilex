@@ -308,6 +308,33 @@
         "icon": "$(debug-restart)"
       },
       {
+        "command": "beguile.createI6Patch",
+        "title": "Beguile: Create I6 Patch"
+      },
+      {
+        "command": "beguile.createPatchOfI6File",
+        "title": "Beguile: Create Patch of This File",
+        "icon": "$(diff-added)"
+      },
+      {
+        "command": "beguile.editI6Patch",
+        "title": "Beguile: Edit I6 Patch"
+      },
+      {
+        "command": "beguile.addToI6Patch",
+        "title": "Beguile: Add I6 File to Patch"
+      },
+      {
+        "command": "beguile.openI6PatchFile",
+        "title": "Beguile: Open Patch",
+        "icon": "$(diff)"
+      },
+      {
+        "command": "beguile.stopI6PatchEditing",
+        "title": "Beguile: Stop Editing Patch",
+        "icon": "$(close-all)"
+      },
+      {
         "command": "beguile.openI6Source",
         "title": "Open I6 Source at Current Line",
         "icon": {
@@ -344,6 +371,21 @@
     "menus": {
       "editor/title": [
         {
+          "command": "beguile.createPatchOfI6File",
+          "when": "resourceExtname =~ /^\\.(h|inf)$/i && !beguile.inI6PatchCopy",
+          "group": "navigation@1"
+        },
+        {
+          "command": "beguile.openI6PatchFile",
+          "when": "beguile.inI6PatchCopy",
+          "group": "navigation@1"
+        },
+        {
+          "command": "beguile.stopI6PatchEditing",
+          "when": "beguile.inI6PatchCopy",
+          "group": "navigation@2"
+        },
+        {
           "command": "beguile.debug",
           "when": "activeWebviewPanelId == 'beguile.debugPanel' || activeWebviewPanelId == 'beguile.gamePanel'",
           "group": "navigation@1"
@@ -373,9 +415,43 @@
         {
           "command": "beguile.entryPointIndicator",
           "when": "false"
+        },
+        {
+          "command": "beguile.createI6Patch",
+          "when": "editorLangId == beguile"
+        },
+        {
+          "command": "beguile.createPatchOfI6File",
+          "when": "resourceExtname =~ /^\\.(h|inf)$/i && !beguile.inI6PatchCopy"
+        },
+        {
+          "command": "beguile.editI6Patch",
+          "when": "editorLangId == beguile"
+        },
+        {
+          "command": "beguile.addToI6Patch",
+          "when": "editorLangId == beguile"
+        },
+        {
+          "command": "beguile.openI6PatchFile",
+          "when": "beguile.inI6PatchCopy"
+        },
+        {
+          "command": "beguile.stopI6PatchEditing",
+          "when": "beguile.inI6PatchCopy"
         }
       ],
       "editor/context": [
+        {
+          "command": "beguile.createI6Patch",
+          "when": "resourceExtname == .bgl",
+          "group": "beguile@2"
+        },
+        {
+          "command": "beguile.createPatchOfI6File",
+          "when": "resourceExtname =~ /^\\.(h|inf)$/i && !beguile.inI6PatchCopy",
+          "group": "beguile@2"
+        },
         {
           "command": "beguile.setEntryPoint",
           "when": "resourceExtname == .bgl && !(resourcePath in beguile.entryPointPaths)",
