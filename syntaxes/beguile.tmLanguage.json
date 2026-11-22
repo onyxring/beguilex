@@ -99,7 +99,7 @@
 
     "emitter-body-single": {
       "comment": "Single-line emitter body: emitter TYPE NAME(params) { i6expr }. Must match before multi-line rule. Case-insensitive.",
-      "match": "(?i)\\b(emitter)\\b([^{\\n]*)\\{([^\\n}]*)\\}",
+      "match": "(?i)\\b(emitter)\\b(?!\\s+class\\b)(?!\\s+[A-Za-z_]\\w*\\s*\\{)([^{\\n]*)\\{([^\\n}]*)\\}",
       "captures": {
         "1": {
           "patterns": [
@@ -124,7 +124,7 @@
 
     "emitter-body-multi": {
       "comment": "Multi-line emitter body. Indentation back-reference ensures } matches opener's indent level. Case-insensitive.",
-      "begin": "(?i)^(\\s*)\\bemitter\\b[^\\n]*\\{[^\\n}]*$",
+      "begin": "(?i)^(\\s*)\\bemitter\\b(?!\\s+class\\b)(?!\\s+[A-Za-z_]\\w*\\s*\\{)[^\\n]*\\{[^\\n}]*$",
       "end": "^\\1\\}",
       "beginCaptures": {
         "0": {
