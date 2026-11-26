@@ -154,12 +154,10 @@
             "order": 5,
             "type": "string",
             "enum": [
-              "E0",
               "E1",
               "E2"
             ],
             "enumDescriptions": [
-              "Archimedes-style",
               "Microsoft-style",
               "Mac MPW-style"
             ],
@@ -172,14 +170,12 @@
             "enum": [
               "",
               "Glulx",
-              "Z3",
               "Z5",
               "Z8"
             ],
             "enumDescriptions": [
               "Use the target specified in the .bgl source file",
               "Glulx (32-bit, .ulx)",
-              "Z-machine version 3 (.z3)",
               "Z-machine version 5 (.z5)",
               "Z-machine version 8 (.z8)"
             ],

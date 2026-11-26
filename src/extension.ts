@@ -62,8 +62,22 @@ function resolveLaunchSource(verb: 'play' | 'debug'): string | undefined {
     return undefined;
 }
 
-/** Build the beguiler binary path and CLI args string from extension settings. */
-function beguilerCommand(isDebug: boolean = false): { bin: string; args: string } {
+/** Split a free-form arguments setting into arguments; quotes group words that hold spaces. */
+function splitArgs(text: string): string[] {
+    const out: string[] = [];
+    const re = /"([^"]*)"|'([^']*)'|(\S+)/g;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(text)) !== null) { out.push(m[1] ?? m[2] ?? m[3]); }
+    return out;
+}
+
+/** A command line for display: arguments that hold spaces are quoted. */
+function shownCommand(bin: string, args: string[]): string {
+    return [bin, ...args].map(a => /\s/.test(a) ? `"${a}"` : a).join(' ');
+}
+
+/** Build the beguiler binary path and its arguments from extension settings. */
+function beguilerCommand(isDebug: boolean = false): { bin: string; args: string[] } {
     const bCfg  = vscode.workspace.getConfiguration('beguiler');
     const i6Cfg = vscode.workspace.getConfiguration('i6');
     const bin: string = bCfg.get('path') || 'beguiler';
@@ -80,7 +94,7 @@ function beguilerCommand(isDebug: boolean = false): { bin: string; args: string 
     if (errorFormat) { parts.push(`-${errorFormat}`); }
 
     const outputPath: string = bCfg.get('outputPath') || '';
-    if (outputPath) { parts.push(`-o "${outputPath}"`); }
+    if (outputPath) { parts.push('-o', outputPath); }
 
     const includePaths: string = bCfg.get('includePaths') || '';
     if (includePaths) {
@@ -92,10 +106,6 @@ function beguilerCommand(isDebug: boolean = false): { bin: string; args: string 
 
     const libraryPath: string = bCfg.get('libraryPath') || '';
     if (libraryPath) {
-        // No shell quoting — child_process.spawn passes args verbatim, so wrapping
-        // in literal "..." would propagate the quote characters into beguiler's argv
-        // and corrupt every libPath-derived file lookup. (Beguiler also defensively
-        // strips matching " or ' from -lib= values, but don't rely on that here.)
         parts.push(`-lib=${libraryPath}`);
     }
 
@@ -103,20 +113,20 @@ function beguilerCommand(isDebug: boolean = false): { bin: string; args: string 
     if (verbSplitWarnings) { parts.push(`-filterVerbSplitWarnings=${verbSplitWarnings === 'hide'}`); }
 
     const extraBeguiler: string = bCfg.get('extraArgs') || '';
-    if (extraBeguiler) { parts.push(extraBeguiler); }
+    if (extraBeguiler) { parts.push(...splitArgs(extraBeguiler)); }
 
     // Inform 6 settings
     const informPath: string = i6Cfg.get('inform6Path') || '';
     if (informPath) { parts.push(`-inform=${informPath}`); }
 
     const extraInform: string = i6Cfg.get('inform6ExtraArgs') || '';
-    if (extraInform) { parts.push(extraInform); }
+    if (extraInform) { parts.push(...splitArgs(extraInform)); }
 
     if (isDebug && i6Cfg.get<boolean>('passDebugFlag', true)) {
         parts.push('-D');
     }
 
-    return { bin, args: parts.join(' ') };
+    return { bin, args: parts };
 }
 
 /** Return the most-recently-modified file among the candidates that exist. */
@@ -265,9 +275,9 @@ export function activate(context: vscode.ExtensionContext) {
         await vscode.window.withProgress(
             { location: vscode.ProgressLocation.Notification, title: `Compiling ${path.basename(bglPath)}…`, cancellable: false },
             () => new Promise<void>((resolve, reject) => {
-                const cmd = `"${bin}" ${args} "${bglPath}"`;
-                outputChannel.appendLine(`> ${cmd}`);
-                const child = cp.spawn(cmd, { shell: true });
+                const argv = [...args, bglPath];
+                outputChannel.appendLine(`> ${shownCommand(bin, argv)}`);
+                const child = cp.spawn(bin, argv);
                 child.stdout.on('data', (chunk: Buffer) => outputChannel.append(chunk.toString()));
                 child.stderr.on('data', (chunk: Buffer) => outputChannel.append(chunk.toString()));
                 child.on('close', (code) => {
@@ -295,7 +305,6 @@ export function activate(context: vscode.ExtensionContext) {
             path.join(bglDir, 'output', stem + '.zblorb'),
             path.join(bglDir, 'output', stem + '.z5'),
             path.join(bglDir, 'output', stem + '.z8'),
-            path.join(bglDir, 'output', stem + '.z3'),
             path.join(bglDir, stem + '.ulx'),
             path.join(bglDir, stem + '.z5'),
         ];
@@ -329,9 +338,9 @@ export function activate(context: vscode.ExtensionContext) {
             { location: vscode.ProgressLocation.Notification, title: `Compiling (debug) ${path.basename(bglPath)}…`, cancellable: false },
             () => new Promise<void>((resolve, reject) => {
                 const cwd = path.dirname(bglPath);
-                const cmd = `"${bin}" --debug ${args} "${bglPath}"`;
-                outputChannel.appendLine(`> (cwd: ${cwd}) ${cmd}`);
-                const child = cp.spawn(cmd, { cwd, shell: true });
+                const argv = ['--debug', ...args, bglPath];
+                outputChannel.appendLine(`> (cwd: ${cwd}) ${shownCommand(bin, argv)}`);
+                const child = cp.spawn(bin, argv, { cwd });
                 child.stdout.on('data', (chunk: Buffer) => outputChannel.append(chunk.toString()));
                 child.stderr.on('data', (chunk: Buffer) => outputChannel.append(chunk.toString()));
                 child.on('close', (code) => {
@@ -361,7 +370,6 @@ export function activate(context: vscode.ExtensionContext) {
             path.join(bglDir, 'output', stem + '.zblorb'),
             path.join(bglDir, 'output', stem + '.z5'),
             path.join(bglDir, 'output', stem + '.z8'),
-            path.join(bglDir, 'output', stem + '.z3'),
             path.join(bglDir, stem + '.ulx'),
             path.join(bglDir, stem + '.z5'),
         ];
@@ -448,7 +456,7 @@ export function activate(context: vscode.ExtensionContext) {
     const { bin: lspBin, args: lspArgs } = beguilerCommand();
     const serverOptions: ServerOptions = {
         command: lspBin,
-        args: ['--lsp', ...lspArgs.split(' ').filter(a => a)],
+        args: ['--lsp', ...lspArgs],
     };
     const traceChannel = vscode.window.createOutputChannel('Beguile LSP Trace');
     const clientOptions: LanguageClientOptions = {

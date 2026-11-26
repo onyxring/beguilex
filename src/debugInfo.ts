@@ -279,7 +279,7 @@ export class DebugInfo {
             for (const line of infContent.split('\n')) {
                 const m2 = /^!%\s*(\+\+?)include_path=(.+)/.exec(line.trim());
                 if (m2) {
-                    const dirs = m2[2].split(',').map(p => p.trim()).filter(d => d);
+                    const dirs = m2[2].replace(/"/g, '').split(',').map(p => p.trim()).filter(d => d);
                     includeDirs = m2[1] === '++' ? [...dirs, ...includeDirs] : dirs;
                 }
             }
