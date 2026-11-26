@@ -371,7 +371,7 @@
     "keywords-declaration": {
       "comment": "Case-insensitive.",
       "name": "storage.modifier.beguile",
-      "match": "(?i)\\b(asI6|asBgl|primitive|extern|extend|emitter|replace|const|alias|ref|static|explicit|default|superposed|additive|inline|hide|synonyms|typeSealed|required(?=\\s+[A-Za-z_])|literal(?=\\s+[A-Za-z_]))\\b"
+      "match": "(?i)\\b(asI6|asBgl|primitive|extern|extend|emitter|replace|const|alias|ref|static|explicit|default|superposed|distributor|additive|inline|hide|synonyms|typeSealed|required(?=\\s+[A-Za-z_])|literal(?=\\s+[A-Za-z_]))\\b"
     },
 
     "keywords-type-declaration": {
