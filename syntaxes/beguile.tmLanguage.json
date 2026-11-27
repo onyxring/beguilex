@@ -288,7 +288,7 @@
         {
           "comment": "#message, #warning, #error, #exit, #using directives (case-insensitive).",
           "name": "keyword.control.directive.beguile",
-          "match": "(?i)#(?:message|warning|error|exit|using|storedEmitFirst|storedEmitLast)\\b"
+          "match": "(?i)#(?:message|warning|error|exit|using|storedEmitFirst|storedEmitLast|emitAfterI6Include)\\b"
         },
         {
           "comment": "#beguilerSettings block header or property reference (#beguilerSettings.propName). Case-insensitive.",
@@ -301,7 +301,7 @@
           "match": "(?i)#(?:startup|emitfirst|emitlast)\\b"
         },
         {
-          "comment": "#i6replace RoutineName [SavedName]; — emits I6 `Replace RoutineName [SavedName];` hoisted above all includes (spec §15.5.1). Unlike bare `#i6 replace X;` (raw-I6-to-EOL, handled by i6-line), this is a structured directive: the operands are ordinary I6 routine identifiers and the statement ends at `;`, so a trailing `// comment` is a genuine Beguile comment. Routine names colored as function entities. Must not use `#i6\\b` before this — `#i6replace` has no word boundary after `#i6`. Case-insensitive.",
+          "comment": "#i6replace RoutineName [SavedName]; — emits I6 `Replace RoutineName [SavedName];` hoisted above all includes (spec §16.5.1). Unlike bare `#i6 replace X;` (raw-I6-to-EOL, handled by i6-line), this is a structured directive: the operands are ordinary I6 routine identifiers and the statement ends at `;`, so a trailing `// comment` is a genuine Beguile comment. Routine names colored as function entities. Must not use `#i6\\b` before this — `#i6replace` has no word boundary after `#i6`. Case-insensitive.",
           "match": "(?i)(#i6replace)\\b(?:\\s+([a-zA-Z_][a-zA-Z0-9_]*))?(?:\\s+([a-zA-Z_][a-zA-Z0-9_]*))?",
           "captures": {
             "1": { "name": "keyword.control.directive.beguile" },

@@ -9,7 +9,7 @@
   ],
   "repository": {
     "bgl-multi-line": {
-      "comment": "Multi-line #bgl{ ... }, #bglDecl{ ... }, or #bglStmt{ ... } region in .inf files. The bare #bgl form covers both in-routine Beguile islands (§15.6) and file-scope precompiler-mode islands (§15.6b). #bglDecl and #bglStmt are file-scope-only escape hatches in precompiler mode that force declaration-only or statement-only parsing. Indentation back-reference (\\1) ensures the closing } matches the opener's indent level, so nested { } inside Beguile statements don't terminate the region prematurely.",
+      "comment": "Multi-line #bgl{ ... }, #bglDecl{ ... }, or #bglStmt{ ... } region in .inf files. The bare #bgl form covers both in-routine Beguile islands (§16.6) and file-scope precompiler-mode islands (§16.6b). #bglDecl and #bglStmt are file-scope-only escape hatches in precompiler mode that force declaration-only or statement-only parsing. Indentation back-reference (\\1) ensures the closing } matches the opener's indent level, so nested { } inside Beguile statements don't terminate the region prematurely.",
       "name": "meta.embedded.block.bgl.inform6",
       "begin": "(?i)^(\\s*)(#bgl(?:Decl|Stmt)?)\\s*(\\{)[^\\n}]*$",
       "end": "^\\1(\\})",
