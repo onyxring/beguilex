@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.1.0-beta] - 2026-11-27
 
 - A **Create Patch** button on any open Inform 6 file, and **Create I6 Patch**,
   **Edit I6 Patch** and **Add I6 File to Patch** commands
